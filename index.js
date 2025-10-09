@@ -69,7 +69,7 @@ app.get("/leaderboard/:period/:page", async (req, res) => {
   }
 });
 
-app.post('/submit', async (req, res) => {
+app.post('/run', async (req, res) => {
   let { code, language, problem } = req.body;
   if (problem.source === 'codeforces') {
     problem = await CFproblems.findOne({ problemId: problem.problemId });
@@ -78,6 +78,29 @@ app.post('/submit', async (req, res) => {
   }
   try {
      const response = await axios.post('https://code-runner-lhdb.onrender.com/run', {
+      code,
+      language,
+      problem
+    });
+    const data = response.data;
+  
+    res.status(200).json(data);
+    
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/submit', async (req, res) => {
+  let { code, language, problem } = req.body;
+  if (problem.source === 'codeforces') {
+    problem = await CFproblems.findOne({ problemId: problem.problemId });
+  } else if (problem.source === 'leetcode') {
+    problem = await leetcodeQuestion.findOne({ problemId: problem.problemId });
+  }
+  try {
+     const response = await axios.post('https://code-runner-lhdb.onrender.com/submit', {
       code,
       language,
       problem
