@@ -1,15 +1,20 @@
-import { getTestcases, executeCode } from '../codeSubmission/helper.js';
+import axios from 'axios';
 
-export async function decideWinner(code, language, problem, timeLimit = 2, memoryLimit = 300) {
-  const allTests = getTestcases(problem, true);
-  if (!allTests.length) return 0;
+export async function decideWinner(code, language, problem) {
+  
+  try {
+    const response = await axios.post('https://code-runner-lhdb.onrender.com/run-all', {
+      code,
+      language,
+      problem
+    }, {
+      headers: { 'Content-Type': 'application/json' }
+    });
 
-  let passedCount = 0;
+    return response.data.passed || 0;
 
-  for (let i = 0; i < allTests.length; i++) {
-    const result = await executeCode(code, language, [allTests[i]], timeLimit, memoryLimit);
-    if (!result.isError) passedCount++;
+  } catch (err) {
+    console.error('Error calling /run-all:', err.message);
+    return 0;
   }
-
-  return passedCount;
 }
