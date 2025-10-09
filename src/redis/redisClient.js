@@ -2,7 +2,7 @@ import { createClient } from "redis";
 
 // Connect to local Redis running in Docker
 const redisClient = createClient({
-  url: "redis://localhost:6379" // Docker port mapping
+  url: "redis://red-d3jqe6ffte5s7380jmpg:6379" // Docker port mapping
 });
 
 redisClient.on("error", (err) => {
