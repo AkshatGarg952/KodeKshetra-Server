@@ -71,11 +71,13 @@ app.get("/leaderboard/:period/:page", async (req, res) => {
 
 app.post('/run', async (req, res) => {
   let { code, language, problem } = req.body;
+  console.log("le re **** ke teri body", req.body)
   if (problem.source === 'codeforces') {
     problem = await CFproblems.findOne({ problemId: problem.problemId });
   } else if (problem.source === 'leetcode') {
     problem = await leetcodeQuestion.findOne({ problemId: problem.problemId });
   }
+  
   try {
      const response = await axios.post('https://code-runner-lhdb.onrender.com/run', {
       code,
@@ -83,6 +85,7 @@ app.post('/run', async (req, res) => {
       problem
     });
     const data = response.data;
+    console.log("le re **** ke tera data", data)
   
     res.status(200).json(data);
     
