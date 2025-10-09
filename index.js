@@ -37,6 +37,12 @@ app.use(cors({
   credentials: true
 }));
 
+app.options('*', cors({
+  origin: "https://kode-kshetra-client.vercel.app",
+  credentials: true
+}));
+
+
 app.get("/", async (req, res) => {
   try{
     const result = await CFsolutions.findOne({ problemId: "1A" });
@@ -190,7 +196,8 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: 'https://kode-kshetra-client.vercel.app',
-    methods: ['GET', 'POST']
+    methods: ['GET', 'POST'],
+    credentials: true
   }
 });
 
