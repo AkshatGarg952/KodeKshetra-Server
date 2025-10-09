@@ -376,10 +376,8 @@ io.on('connection', (socket) => {
         //  Logic starts to calculate winner
         if(!player1.status && !player2.status){
           console.log("Calculating winner based on test cases passed and time taken...");
-          const timeLimit = question.timeLimit;
-          const memoryLimit = question.memoryLimit;
-          const player1PassedCases = await decideWinner(player1.code, player1.language, question, timeLimit, memoryLimit);
-          const player2PassedCases = await decideWinner(player2.code , player2.language, question, timeLimit, memoryLimit);
+          const player1PassedCases = await decideWinner(player1.code, player1.language, question);
+          const player2PassedCases = await decideWinner(player2.code , player2.language, question);
           console.log(player1.time, player2.time);
          if(player1PassedCases > player2PassedCases){
           player1.status = "won";
