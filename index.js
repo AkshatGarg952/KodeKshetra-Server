@@ -37,11 +37,6 @@ app.use(cors({
   credentials: true
 }));
 
-app.options('*', cors({
-  origin: "https://kode-kshetra-client.vercel.app",
-  credentials: true
-}));
-
 
 app.get("/", async (req, res) => {
   try{
