@@ -39,12 +39,7 @@ app.use(cors({
 
 
 app.get("/", async (req, res) => {
-  try{
-    const result = await CFsolutions.findOne({ problemId: "1A" });
-    res.status(200).send(result);
-  } catch (err) { 
-    res.status(400).send(err.message);
-  }
+  res.status(200).send("Welcome to KodeKshetra Server")
 });
 
 
@@ -71,7 +66,6 @@ app.get("/leaderboard/:period/:page", async (req, res) => {
 
 app.post('/run', async (req, res) => {
   let { code, language, problem } = req.body;
-  console.log("le re **** ke teri body", req.body)
   if (problem.source === 'codeforces') {
     problem = await CFproblems.findOne({ problemId: problem.problemId });
   } else if (problem.source === 'leetcode') {
@@ -85,7 +79,6 @@ app.post('/run', async (req, res) => {
       problem
     });
     const data = response.data;
-    console.log("le re **** ke tera data", data)
   
     res.status(200).json(data);
     
