@@ -17,6 +17,7 @@
 The **server** handles authentication, matchmaking, AI-based test generation, and leaderboard ranking — all built on a **microservice architecture** for scalability and modularity.
 
 ### 🧩 Microservices
+
 - 🧠 **Main Backend (Node.js + Express)** — Authentication, matchmaking, battles, XP, badges, and leaderboards  
 - ⚙️ **Hidden Forces (FastAPI + LangChain + Gemini)** — AI-based hidden test case generator for Codeforces & LeetCode  
 - ⚡ **Code Runner (Node.js + Judge0)** — Executes code safely against sample & hidden tests
@@ -25,30 +26,32 @@ The **server** handles authentication, matchmaking, AI-based test generation, an
 
 ## 🏗️ Folder Structure
 
+```
 KodeKshetra-Server/
 │
 ├── src/
-│ ├── controllers/
-│ │ ├── admin.controller.js
-│ │ └── user.controller.js
-│ ├── database/mongoose.js
-│ ├── helper/
-│ │ ├── Questions/
-│ │ ├── XP/
-│ │ ├── badges/
-│ │ ├── fetchProfile/
-│ │ ├── leaderboard/
-│ │ ├── updation/
-│ │ └── winner/
-│ ├── middlewares/
-│ ├── models/
-│ ├── redis/
-│ └── routes/
+│   ├── controllers/
+│   │   ├── admin.controller.js
+│   │   └── user.controller.js
+│   ├── database/
+│   │   └── mongoose.js
+│   ├── helper/
+│   │   ├── Questions/
+│   │   ├── XP/
+│   │   ├── badges/
+│   │   ├── fetchProfile/
+│   │   ├── leaderboard/
+│   │   ├── updation/
+│   │   └── winner/
+│   ├── middlewares/
+│   ├── models/
+│   ├── redis/
+│   └── routes/
 │
 ├── index.js
 ├── package.json
 └── README.md
-
+```
 
 ---
 
@@ -57,7 +60,7 @@ KodeKshetra-Server/
 - 👥 **User Auth & Profiles** — Register/login with LeetCode & Codeforces usernames  
 - ⚔️ **Real-time Battles** — Fight friends or random rivals in live DSA/CP duels  
 - 🧩 **Smart Problem Selection** — Fetches unsolved problems for fairness  
-- 🧠 **AI Hidden Tests** — Generated via the “Hidden Forces” service using FastAPI + LangChain + Gemini  
+- 🧠 **AI Hidden Tests** — Generated via the "Hidden Forces" service using FastAPI + LangChain + Gemini  
 - 🏅 **Badges & XP System** — Gamified progress tracking  
 - 📊 **Leaderboards** — Rankings for last 24 hours & 7 days  
 - 🔥 **90-Day Heatmap** — Visual consistency tracker  
@@ -71,31 +74,31 @@ KodeKshetra-Server/
 ### 👤 User Routes
 
 | Method | Endpoint | Description |
-|:------:|:----------|:-------------|
-| POST | `/api/users/register` | Register new user |
-| POST | `/api/users/login` | Login existing user |
-| PUT | `/api/users/update/:id` | Update user data |
-| GET | `/getUserDetails/:id` | Fetch badges, streaks, heatmap, stats |
-| POST | `/api/users/logout` | Logout user |
-| POST | `/run` | Execute code (sample tests only) |
-| POST | `/submit` | Execute code (sample + hidden tests) |
-| GET | `/leaderboard/:period/:page` | Paginated leaderboard data |
+|:------:|:---------|:------------|
+| `POST` | `/api/users/register` | Register new user |
+| `POST` | `/api/users/login` | Login existing user |
+| `PUT` | `/api/users/update/:id` | Update user data |
+| `GET` | `/getUserDetails/:id` | Fetch badges, streaks, heatmap, stats |
+| `POST` | `/api/users/logout` | Logout user |
+| `POST` | `/run` | Execute code (sample tests only) |
+| `POST` | `/submit` | Execute code (sample + hidden tests) |
+| `GET` | `/leaderboard/:period/:page` | Paginated leaderboard data |
 
 ### 🧑‍💻 Admin Routes
 
 | Method | Endpoint | Description |
-|:------:|:----------|:-------------|
-| POST | `/api/admin/addCFProblem` | Add Codeforces problem metadata |
-| POST | `/api/admin/addLCProblem` | Add LeetCode problem metadata |
-| POST | `/api/admin/addCFSolution` | Add Codeforces solution |
-| POST | `/api/admin/addLCSolution` | Add LeetCode solution |
+|:------:|:---------|:------------|
+| `POST` | `/api/admin/addCFProblem` | Add Codeforces problem metadata |
+| `POST` | `/api/admin/addLCProblem` | Add LeetCode problem metadata |
+| `POST` | `/api/admin/addCFSolution` | Add Codeforces solution |
+| `POST` | `/api/admin/addLCSolution` | Add LeetCode solution |
 
 ---
 
 ## 🏅 Gamification System
 
 | Feature | Description |
-|----------|--------------|
+|---------|-------------|
 | 🏆 **Badges** | Earned after battles based on conditions |
 | 🔥 **Streaks** | Track consecutive wins |
 | 📈 **Heatmap** | Visual representation of user activity |
@@ -113,7 +116,7 @@ cd KodeKshetra-Server
 # Install dependencies
 npm install
 
-# Create .env file
+# Create .env file with the following variables
 MONGO_URI=your_mongo_uri
 JWT_SECRET=your_jwt_secret
 REDIS_URL=your_redis_url
@@ -121,52 +124,57 @@ JUDGE0_URL=your_judge0_url
 
 # Start server
 npm run dev
+```
 
-🧱 Tech Stack
+---
 
-Backend: Node.js, Express.js, FastAPI
+## 🧱 Tech Stack
 
-AI: LangChain, Gemini, LangGraph
+| Component | Technology |
+|-----------|------------|
+| **Backend** | Node.js, Express.js, FastAPI |
+| **AI** | LangChain, Gemini, LangGraph |
+| **Database** | MongoDB (Mongoose) |
+| **Cache** | Redis |
+| **Execution** | Judge0 API |
+| **Auth** | JWT |
 
-Database: MongoDB (Mongoose)
+---
 
-Cache: Redis
+## 🏛️ Architecture
 
-Execution: Judge0 API
-
-Auth: JWT
-
+```
 User
  ↓
 KodeKshetra Server (Node.js)
  ├── Matchmaking (Redis)
  ├── Code Runner (Judge0)
  └── Hidden Forces (FastAPI + LangChain)
+```
 
-🤝 Contributing
+---
+
+## 🤝 Contributing
 
 Contributions are welcome!
 
-Fork this repo
+1. Fork this repo
+2. Create a feature branch (`git checkout -b feature-name`)
+3. Commit and push
+4. Open a Pull Request 🚀
 
-Create a feature branch (git checkout -b feature-name)
+---
 
-Commit and push
+## 📜 License
 
-Open a Pull Request 🚀
+Licensed under the **MIT License**.
 
-📜 License
+---
 
-Licensed under the MIT License.
+## 💡 Acknowledgements
 
-💡 Acknowledgements
-
-Judge0
-
-FastAPI
-
-LangChain
-
-MongoDB
-
-Redis
+- [Judge0](https://judge0.com/)
+- [FastAPI](https://fastapi.tiangolo.com/)
+- [LangChain](https://www.langchain.com/)
+- [MongoDB](https://www.mongodb.com/)
+- [Redis](https://redis.io/)
