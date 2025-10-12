@@ -154,17 +154,6 @@ KodeKshetra Server (Node.js)
 
 ---
 
-## 🤝 Contributing
-
-Contributions are welcome!
-
-1. Fork this repo
-2. Create a feature branch (`git checkout -b feature-name`)
-3. Commit and push
-4. Open a Pull Request 🚀
-
----
-
 ## 📜 License
 
 Licensed under the **MIT License**.
