@@ -53,8 +53,6 @@ XP: {
   default: []
 },
 
-// matches:[], 
-
 totalB: {
   type: [{
     date: { type: Date, default: Date.now },
@@ -86,28 +84,6 @@ currStreak: { type: Number, default: 0 },
 maxWinStreak: { type: Number, default: 0 },
 
 currWinStreak: { type: Number, default: 0 },
-
-// topicWonCP: {
-//   type: Map,
-//   of: String,
-//   default: {} 
-// },
-// topicWonDSA: {
-//   type: Map,
-//   of: String,
-//   default: {}
-// },
-
-
-// lastBattleDate: {
-//   type: Date,
-//   default: null
-// },
-
-// lastBattleWon:{
-// type: Date,
-// default: null
-// },
 
 createdAt: { type: Date, default: Date.now }
 });
