@@ -57,11 +57,65 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(express.urlencoded({ extended: true, limit: '200kb' }));
 app.use(express.json({ limit: '200kb' }));
-app.use(cors({
-  origin: ['https://kode-kshetra-client.vercel.app', 'http://localhost:5173', 'http://127.0.0.1:5173'],
+
+const DEFAULT_ALLOWED_ORIGINS = [
+  'https://kode-kshetra-client.vercel.app',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173'
+];
+
+const configuredOrigins = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const allowedOrigins = Array.from(new Set([
+  ...DEFAULT_ALLOWED_ORIGINS,
+  ...configuredOrigins
+]));
+
+const isOriginAllowed = (origin) => {
+  if (!origin) {
+    return true;
+  }
+
+  if (allowedOrigins.includes(origin)) {
+    return true;
+  }
+
+  try {
+    const parsedOrigin = new URL(origin);
+    const { protocol, hostname } = parsedOrigin;
+
+    if ((hostname === 'localhost' || hostname === '127.0.0.1') && (protocol === 'http:' || protocol === 'https:')) {
+      return true;
+    }
+
+    // Allow Vercel preview deployments without hardcoding each unique URL.
+    if (protocol === 'https:' && hostname.endsWith('.vercel.app')) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+};
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (isOriginAllowed(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error(`Origin not allowed by CORS: ${origin}`));
+  },
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true
-}));
+};
+
+app.use(cors(corsOptions));
 
 const PROBLEM_CACHE_TTL_MS = Number(process.env.PROBLEM_CACHE_TTL_MS || 300000);
 const PROBLEM_CACHE_MAX_SIZE = Number(process.env.PROBLEM_CACHE_MAX_SIZE || 1000);
@@ -222,7 +276,14 @@ app.post('/submit', async (req, res) => {
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: ['https://kode-kshetra-client.vercel.app', 'http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: (origin, callback) => {
+      if (isOriginAllowed(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`Origin not allowed by Socket.IO CORS: ${origin}`));
+    },
     methods: ['GET', 'POST'],
     credentials: true
   }
