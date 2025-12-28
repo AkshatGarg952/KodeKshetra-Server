@@ -146,8 +146,12 @@ app.use('/api/users', userRouter);
 app.use('/api/admin', adminRouter);
 
 app.get("/leaderboard/:period/:page", async (req, res) => {
-  const period = req.params.period;
+  const period = Number.parseInt(req.params.period, 10);
   const page = parseInt(req.params.page, 10);
+
+  if (![1, 7].includes(period)) {
+    return res.status(400).json({ message: "Invalid period. Use 1 or 7." });
+  }
 
   if (Number.isNaN(page) || page < 1) {
     return res.status(400).json({ message: "Invalid page number" });
