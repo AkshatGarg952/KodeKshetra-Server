@@ -3,19 +3,19 @@ import adminC from "../controllers/admin.controller.js";
 const adminRouter = express.Router();
 const adminController = new adminC();
 
-adminRouter.post("/addCFProblem", (req, res)=>{
+adminRouter.post("/addCFProblem", (req, res) => {
    adminController.addCFProblem(req, res);
 })
 
-adminRouter.post("/addLCProblem", (req, res)=>{
-   adminController.addCFProblem(req, res);
+adminRouter.post("/addLCProblem", (req, res) => {
+   adminController.addLCProblem(req, res);
 })
 
-adminRouter.post("/addCFSolution", (req, res)=>{
+adminRouter.post("/addCFSolution", (req, res) => {
    adminController.addCFSolution(req, res);
 })
 
-adminRouter.post("/addLCSolution", (req, res)=>{
+adminRouter.post("/addLCSolution", (req, res) => {
    adminController.addLCSolution(req, res);
 })
 

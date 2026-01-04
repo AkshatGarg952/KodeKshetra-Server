@@ -119,8 +119,12 @@ npm install
 # Create .env file with the following variables
 MONGO_URI=your_mongo_uri
 JWT_SECRET=your_jwt_secret
-REDIS_URL=your_redis_url
-JUDGE0_URL=your_judge0_url
+REDIS_URL=redis://your_redis_host:6379
+PORT_NO=5000
+CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
+NODE_ENV=development
 
 # Start server
 npm run dev

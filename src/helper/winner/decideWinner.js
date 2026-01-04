@@ -1,9 +1,9 @@
 import axios from 'axios';
 
 export async function decideWinner(code, language, problem) {
-  
+
   try {
-    const response = await axios.post('https://code-runner-lhdb.onrender.com/run-all', {
+    const response = await axios.post('http://localhost:9000/run-all', {
       code,
       language,
       problem
