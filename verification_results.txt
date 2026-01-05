@@ -1,0 +1,17 @@
+✅ DB Connected
+🔄 Updating Leaderboards...
+
+🔍 Checking leaderboard:1:
+   - Score: 695ba45e09ee39cbf6a29850 | User: user_1767613532786_1 (Streak field: currStreak=0, currentStreak=undefined) | ID: 695ba45d09ee39cbf6a2984b
+   - Score: 695ba4c38d11004d3f320141 | User: user_1767613633616_1 (Streak field: currStreak=0, currentStreak=undefined) | ID: 695ba4c28d11004d3f32013c
+   - Score: 695ba58d1cf1cdffa49f3bb1 | User: user_1767613836347_1 (Streak field: currStreak=0, currentStreak=undefined) | ID: 695ba58d1cf1cdffa49f3bac
+   - Score: 695ba8f0d09ab48ed6d6b0f8 | User: user_1767614703525_1 (Streak field: currStreak=0, currentStreak=undefined) | ID: 695ba8efd09ab48ed6d6b0f3
+   - Score: 695b5a7c86f6f30b4cdfee42 | User: KingBidi (Streak field: currStreak=0, currentStreak=undefined) | ID: 695b5a4386f6f30b4cdfec22
+
+🔍 Checking leaderboard:7:
+   - Score: 695ba45e09ee39cbf6a29850 | User: user_1767613532786_1 (Streak field: currStreak=0, currentStreak=undefined) | ID: 695ba45d09ee39cbf6a2984b
+   - Score: 695ba4c38d11004d3f320141 | User: user_1767613633616_1 (Streak field: currStreak=0, currentStreak=undefined) | ID: 695ba4c28d11004d3f32013c
+   - Score: 695ba58d1cf1cdffa49f3bb1 | User: user_1767613836347_1 (Streak field: currStreak=0, currentStreak=undefined) | ID: 695ba58d1cf1cdffa49f3bac
+   - Score: 695ba8f0d09ab48ed6d6b0f8 | User: user_1767614703525_1 (Streak field: currStreak=0, currentStreak=undefined) | ID: 695ba8efd09ab48ed6d6b0f3
+   - Score: 695b5a7c86f6f30b4cdfee42 | User: KingBidi (Streak field: currStreak=0, currentStreak=undefined) | ID: 695b5a4386f6f30b4cdfec22
+👋 Exiting...
