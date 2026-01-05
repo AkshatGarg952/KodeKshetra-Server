@@ -40,7 +40,7 @@ const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cors({
-  origin: ["https://kode-kshetra-client.vercel.app", "http://localhost:5173", "http://127.0.0.1:5173"],
+  origin: true,
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true
 }));
@@ -94,7 +94,7 @@ app.post('/run', async (req, res) => {
   }
 
   try {
-    const response = await axios.post('http://localhost:9000/run', {
+    const response = await axios.post(`${process.env.CODE_RUNNER_URL}/run`, {
       code,
       language,
       problem
@@ -124,7 +124,7 @@ app.post('/submit', async (req, res) => {
     problem = await leetcodeQuestion.findOne({ problemId: problem.problemId });
   }
   try {
-    const response = await axios.post('http://localhost:9000/submit', {
+    const response = await axios.post(`${process.env.CODE_RUNNER_URL}/submit`, {
       code,
       language,
       problem
