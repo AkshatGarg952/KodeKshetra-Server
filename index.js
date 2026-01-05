@@ -466,7 +466,7 @@ io.on('connection', (socket) => {
 });
 
 
-const PORT = process.env.PORT_NO || 5000;
+const PORT = process.env.PORT || process.env.PORT_NO || 5000;
 server.listen(PORT, () => {
   connectDB();
   console.log(`🚀 Server running on http://localhost:${PORT}`);

@@ -15,7 +15,7 @@ export default class UserC {
 
     try {
       if (await User.findOne({ email })) {
-        return res.status(400).send("User Already exists! Try with another emailId.");
+        return res.status(400).json({ message: "User Already exists! Try with another emailId." });
       }
 
       const newUserData = {
@@ -24,7 +24,7 @@ export default class UserC {
       }
 
       if (!password) {
-        return res.status(400).send("Password is required.");
+        return res.status(400).json({ message: "Password is required." });
       }
       newUserData.password = await bcrypt.hash(password, 12);
 
@@ -46,7 +46,7 @@ export default class UserC {
         }
         catch (err) {
           console.log("cf", err.message)
-          return res.status(500).send("Server error: " + err.message);
+          return res.status(500).json({ message: "Server error: " + err.message });
         }
       }
       await newUser.save();
@@ -56,7 +56,7 @@ export default class UserC {
     }
 
     catch (err) {
-      res.status(400).send(err.message);
+      res.status(400).json({ message: err.message });
     }
 
   }
@@ -68,12 +68,12 @@ export default class UserC {
     try {
       const oldUser = await User.findOne({ email });
       if (!oldUser) {
-        return res.status(400).send("No User exists with this email!");
+        return res.status(400).json({ message: "No User exists with this email!" });
       }
 
       const isMatch = await bcrypt.compare(password, oldUser.password);
       if (!isMatch) {
-        return res.status(400).send("Please check the credentials that you have entered!");
+        return res.status(400).json({ message: "Please check the credentials that you have entered!" });
       }
       const token = jwt.sign({ id: oldUser._id }, process.env.JWT_SECRET, { expiresIn: "24h" });
       res.status(200).json({ oldUser, token });
@@ -81,7 +81,7 @@ export default class UserC {
     }
 
     catch (err) {
-      res.status(400).send(err.message);
+      res.status(400).json({ message: err.message });
     }
   }
 
@@ -92,7 +92,7 @@ export default class UserC {
     try {
       const user = await User.findById(userId);
       if (!user) {
-        return res.status(404).send("User does not exist!");
+        return res.status(404).json({ message: "User does not exist!" });
       }
 
       const allowedFields = ['username'];
@@ -100,7 +100,7 @@ export default class UserC {
 
       const isValidOperation = updates.every(field => allowedFields.includes(field));
       if (!isValidOperation) {
-        return res.status(400).send("Invalid update fields detected!");
+        return res.status(400).json({ message: "Invalid update fields detected!" });
       }
 
       if (req.file) {
@@ -121,7 +121,7 @@ export default class UserC {
       });
     } catch (err) {
       console.error(err);
-      return res.status(500).send("Server error: " + err.message);
+      return res.status(500).json({ message: "Server error: " + err.message });
     }
   }
 
@@ -135,7 +135,7 @@ export default class UserC {
     try {
       const user = await User.findById(userId);
       if (!user) {
-        return res.status(404).send("User does not exist!");
+        return res.status(404).json({ message: "User does not exist!" });
       }
 
       const counts = {};
@@ -200,7 +200,7 @@ export default class UserC {
 
       res.status(200).send(ans);
     } catch (err) {
-      res.status(400).send(err.message);
+      res.status(400).json({ message: err.message });
     }
   }
 
