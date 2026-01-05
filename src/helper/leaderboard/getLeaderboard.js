@@ -5,7 +5,7 @@ import mongoose from "mongoose";
 export default async function getPaginatedLeaderboardFromRedis(key, page = 1, limit = 10) {
   try {
     const start = (page - 1) * limit;
-    const end = start + limit - 1; // ✅ Correct inclusive end index
+    const end = start + limit; // Fetch one extra to check for next page
 
     // ✅ Fetch from Redis with scores (highest to lowest)
     const raw = await redisClient.zRange(key, start, end, {
@@ -17,12 +17,24 @@ export default async function getPaginatedLeaderboardFromRedis(key, page = 1, li
       return { result: [], hasNextPage: false };
     }
 
+    // Check if we have more items than limit
+    // raw array has (score, value) pairs, so length is 2x items.
+    // If we asked for limit+1 items, we expect at most (limit+1)*2 length.
+    // If raw.length > limit * 2, it means we have the extra item.
+    let hasNextPage = false;
+    let effectiveRaw = raw;
+
+    if (raw.length > limit * 2) {
+      hasNextPage = true;
+      effectiveRaw = raw.slice(0, limit * 2); // Remove the extra item
+    }
+
     // ✅ Extract user IDs and scores
     const userIds = [];
     const scoresMap = {};
-    for (let i = 0; i < raw.length; i += 2) {
-      const userId = raw[i];
-      const score = parseFloat(raw[i + 1]);
+    for (let i = 0; i < effectiveRaw.length; i += 2) {
+      const userId = effectiveRaw[i];
+      const score = parseFloat(effectiveRaw[i + 1]);
       userIds.push(userId);
       scoresMap[userId] = score;
     }
@@ -50,14 +62,11 @@ export default async function getPaginatedLeaderboardFromRedis(key, page = 1, li
           rank: start + idx + 1, // global rank
           username: user.username,
           profilePicture: user.profilePicture,
-          currentStreak: user.currentStreak,
-          points: scoresMap[userId],
+          currentStreak: user.currStreak,
+          points: isNaN(scoresMap[userId]) ? 0 : scoresMap[userId],
         };
       })
       .filter(Boolean);
-
-    // ✅ Pagination check
-    const hasNextPage = raw.length / 2 > limit;
 
     return { result, hasNextPage };
   } catch (err) {

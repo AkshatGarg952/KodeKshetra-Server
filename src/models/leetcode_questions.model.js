@@ -9,7 +9,7 @@ const leetcodeQuestionSchema = new Schema({
   tags: [{ type: String }],
   difficulty: { type: String, enum: ['Easy', 'Medium', 'Hard'], required: true },
   timeLimit: { type: Number, default: 2 },
-  memoryLimit: { type: Number, default: 256 },
+  memoryLimit: { type: Number, default: 256000 },
   description: { type: String, required: true },
   constraints: [{ type: String }],
   sampleTests: [

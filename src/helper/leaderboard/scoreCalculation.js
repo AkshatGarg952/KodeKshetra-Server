@@ -8,7 +8,7 @@ function calculateScoreForUser(user, timeWindowStart) {
     ?.filter(entry => new Date(entry.date) >= timeWindowStart)
     .reduce((sum, entry) => sum + (entry.xp || 0), 0) || 0;
 
-  
+
   const totalWins = user.totalW
     ?.filter(entry => new Date(entry.date) >= timeWindowStart)
     .reduce((sum, entry) => sum + (entry.battlesWon || 0), 0) || 0;
@@ -21,15 +21,14 @@ function calculateScoreForUser(user, timeWindowStart) {
   // 4️⃣ Win ratio
   const winRatio = matchesPlayed === 0 ? 0 : totalWins / matchesPlayed;
 
-const totalPoints = 
-    (totalWins * 50) +        // each win gives 50 points
-    (matchesPlayed * 5) +     // each battle played gives 5 points
-    (xp) +                    // XP adds directly
-    (Math.floor((totalWins / Math.max(matchesPlayed,1)) * 100)); 
-    // extra points for good win ratio (0-100)
+  const totalPoints =
+    ((totalWins || 0) * 50) +        // each win gives 50 points
+    ((matchesPlayed || 0) * 5) +     // each battle played gives 5 points
+    (xp || 0) +                    // XP adds directly
+    (Math.floor(((totalWins || 0) / Math.max((matchesPlayed || 0), 1)) * 100));
+  // extra points for good win ratio (0-100)
 
-
-  return totalPoints;
+  return isNaN(totalPoints) ? 0 : totalPoints;
 }
 
 
@@ -45,7 +44,7 @@ export async function updateLeaderboard({ key, days }) {
 
     for await (const user of cursor) {
       const score = calculateScoreForUser(user, timeWindowStart);
-      if (score > 0) {
+      if (score >= 0) {
         pipeline.zAdd(key, { score, value: user._id.toString() });
       }
     }

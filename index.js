@@ -50,6 +50,14 @@ app.get("/", async (req, res) => {
   res.status(200).send("Welcome to KodeKshetra Server")
 });
 
+app.get("/api/health", (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    service: 'KodeKshetra-Server',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
 
 app.use('/api/users', userRouter);
 
@@ -362,64 +370,52 @@ io.on('connection', (socket) => {
 
         // Logic ends to calculate XP
 
-        const user1 = await User.findById(player1.id);
-        const user2 = await User.findById(player2.id);
+        // Users not fetched here to avoid stale data
 
         //  Logic starts to set XP  
-        updateXP(player1);
-        updateXP(player2);
+        await updateXP(player1);
+        await updateXP(player2);
         // Logic ends to set XP
 
 
         // Logic starts to set totalB and totalW
-        battleUpdate(player1);
-        battleUpdate(player2);
+        await battleUpdate(player1);
+        await battleUpdate(player2);
         // Logic ends to set totalB and totalW
 
         //  Logic starts to set streaks
-        setStreaks(player1);
-        setStreaks(player2);
+        await setStreaks(player1);
+        await setStreaks(player2);
         //  Logic ends to update the streaks
 
         //  Logic starts to update the solved Questions
 
+        //  Replacing user.save() with atomic findByIdAndUpdate to avoid VersionError
+        const updateSolvedAndTopics = async (userId, problemId, platform, tags) => {
+          const updates = {
+            $push: { solvedQuestions: { platform, problemId } },
+            $inc: {}
+          };
+
+          if (tags && Array.isArray(tags)) {
+            tags.forEach(tag => {
+              updates.$inc[`topicsMastered.${tag}`] = 1;
+            });
+          }
+
+          await User.findByIdAndUpdate(userId, updates);
+        };
+
         if (battle.mode === "cp") {
-          user1.solvedQuestions.push({
-            platform: "Codeforces",
-            problemId: question.problemId,
-          });
-
-
-          user2.solvedQuestions.push({
-            platform: "Codeforces",
-            problemId: question.problemId,
-          });
+          await updateSolvedAndTopics(player1.id, question.problemId, "Codeforces", question.tags);
+          await updateSolvedAndTopics(player2.id, question.problemId, "Codeforces", question.tags);
+        } else {
+          await updateSolvedAndTopics(player1.id, question.problemId, "LeetCode", question.tags);
+          await updateSolvedAndTopics(player2.id, question.problemId, "LeetCode", question.tags);
         }
-        else {
-
-          user1.solvedQuestions.push({
-            platform: "Leetcode",
-            problemId: question.problemId,
-          });
-
-          user2.solvedQuestions.push({
-            platform: "Leetcode",
-            problemId: question.problemId,
-          });
-
-        }
-
-        await user1.save();
-        await user2.save();
         //  Logic ends to update the solved Questions
 
-        for (let i = 0; i < question.tags.length; i++) {
-          const topic = question.tags[i];
-          user1.topicsMastered.set(topic, (user1.topicsMastered.get(topic) || 0) + 1);
-          user2.topicsMastered.set(topic, (user2.topicsMastered.get(topic) || 0) + 1);
-        }
-        await user1.save();
-        await user2.save();
+        // Topics updated atomically above
 
         // badgesEarned(player1); // ye function complete karna hai
         // badgesEarned(player2);
