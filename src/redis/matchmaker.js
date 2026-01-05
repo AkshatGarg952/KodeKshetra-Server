@@ -10,7 +10,6 @@ async function tryToMatch(mode, topic, io, onlineUsers) {
     return;
   }
 
-  console.log("online", onlineUsers)
   const queueKey = `${mode}:${topic}`;
   const queue = await redisClient.lRange(queueKey, 0, -1);
   const parsedQueue = queue.map(user => JSON.parse(user));

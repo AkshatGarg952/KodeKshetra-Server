@@ -7,9 +7,12 @@ const getDSAQuestion = async (battle, user1Solved, user2Solved) => {
         question.tags && question.tags.includes(battle.topic)
     );
 
-    const unsolvedQuestions = topicQuestions.filter((question) => 
-        !user1Solved.includes(question.problemId) && 
-        !user2Solved.includes(question.problemId)
+    const user1SolvedIds = new Set(user1Solved.map(q => q.problemId));
+    const user2SolvedIds = new Set(user2Solved.map(q => q.problemId));
+
+    const suitableQuestions = topicQuestions.filter((question) =>
+        !user1SolvedIds.has(question.problemId) &&
+        !user2SolvedIds.has(question.problemId)
     );
 
     let finalQuestion;
