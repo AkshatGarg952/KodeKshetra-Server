@@ -1,9 +1,14 @@
-import redisClient from "../../redis/redisClient.js";
+import redisClient, { isRedisAvailable } from "../../redis/redisClient.js";
 import User from "../../models/user.model.js";
 import mongoose from "mongoose";
 
 export default async function getPaginatedLeaderboardFromRedis(key, page = 1, limit = 10) {
   try {
+    if (!isRedisAvailable()) {
+      console.warn('⚠️ Redis is not available. Cannot fetch leaderboard.');
+      return { result: [], hasNextPage: false };
+    }
+
     const start = (page - 1) * limit;
     const end = start + limit; // Fetch one extra to check for next page
 

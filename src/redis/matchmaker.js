@@ -1,15 +1,20 @@
 import { v4 as uuidv4 } from "uuid";
-import redisClient from './redisClient.js';
+import redisClient, { isRedisAvailable } from './redisClient.js';
 import User from '../models/user.model.js';
 import Battle from '../models/battle.model.js';
 import getQuestionForBattle from "../helper/Questions/fetchQuestion.js";
 
 async function tryToMatch(mode, topic, io, onlineUsers) {
+  if (!isRedisAvailable()) {
+    console.warn('⚠️ Redis is not available. Cannot perform matchmaking.');
+    return;
+  }
+
   console.log("online", onlineUsers)
   const queueKey = `${mode}:${topic}`;
   const queue = await redisClient.lRange(queueKey, 0, -1);
   const parsedQueue = queue.map(user => JSON.parse(user));
-  
+
   for (let i = 0; i < parsedQueue.length; i++) {
     for (let j = i + 1; j < parsedQueue.length; j++) {
       const user1 = parsedQueue[i];
@@ -26,22 +31,22 @@ async function tryToMatch(mode, topic, io, onlineUsers) {
         const battleId = uuidv4();
         const userx = await User.findById(user1.userId);
         const usery = await User.findById(user2.userId);
-        
-        const battle = {mode:mode, topic:topic}
+
+        const battle = { mode: mode, topic: topic }
         let question = await getQuestionForBattle(battle, userx, usery);
 
         let finalQuestion;
-      if(battle.mode==="cp"){
-      const { _id, hiddenTestCases, __v, ...safeQuestion } = question.toObject ? question.toObject() : question;
-      finalQuestion = safeQuestion;
-      }
-      else if(battle.mode==="dsa"){
-      const { _id, source, url, memoryLimit, timeLimit, completeCodeTemplates
-,  hiddenTests, __v, ...safeQuestion } = question.toObject ? question.toObject() : question;
-      finalQuestion = safeQuestion;
-      }
-      
-      console.log("finalQuestion", finalQuestion)
+        if (battle.mode === "cp") {
+          const { _id, hiddenTestCases, __v, ...safeQuestion } = question.toObject ? question.toObject() : question;
+          finalQuestion = safeQuestion;
+        }
+        else if (battle.mode === "dsa") {
+          const { _id, source, url, memoryLimit, timeLimit, completeCodeTemplates
+            , hiddenTests, __v, ...safeQuestion } = question.toObject ? question.toObject() : question;
+          finalQuestion = safeQuestion;
+        }
+
+        console.log("finalQuestion", finalQuestion)
         const battleData = {
           player1: user1.userId,
           player2: user2.userId,

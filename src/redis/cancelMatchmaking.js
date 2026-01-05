@@ -1,6 +1,11 @@
-import redisClient from "./redisClient.js";
+import redisClient, { isRedisAvailable } from "./redisClient.js";
 
 async function cancelMatchmaking({ userId, mode, topic }) {
+  if (!isRedisAvailable()) {
+    console.warn('⚠️ Redis is not available. Cannot cancel matchmaking.');
+    return false;
+  }
+
   const queueKey = `${mode}:${topic}`;
   const queue = await redisClient.lRange(queueKey, 0, -1);
 

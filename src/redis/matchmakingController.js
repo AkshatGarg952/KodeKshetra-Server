@@ -1,6 +1,11 @@
-import redisClient from './redisClient.js';
+import redisClient, { isRedisAvailable } from './redisClient.js';
 
 async function addUserToQueue({ userId, mode, topic, rating }) {
+  if (!isRedisAvailable()) {
+    console.warn('⚠️ Redis is not available. Matchmaking is disabled.');
+    throw new Error('Matchmaking service is currently unavailable');
+  }
+
   const finalTopic = topic;
   const queueKey = `${mode}:${finalTopic}`;
 

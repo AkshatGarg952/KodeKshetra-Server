@@ -1,4 +1,4 @@
-import redisClient from '../../redis/redisClient.js';
+import redisClient, { isRedisAvailable } from '../../redis/redisClient.js';
 import User from '../../models/user.model.js';
 import dayjs from 'dayjs';
 
@@ -38,6 +38,11 @@ export async function updateLeaderboard({ key, days }) {
   const timeWindowStart = dayjs(now).subtract(days, 'day').toDate();
 
   try {
+    if (!isRedisAvailable()) {
+      console.warn('⚠️ Redis is not available. Cannot update leaderboard.');
+      return;
+    }
+
     await redisClient.del(key);
     const cursor = User.find().cursor();
     const pipeline = redisClient.multi();
