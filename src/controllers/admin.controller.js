@@ -90,9 +90,15 @@ export default class adminC {
             }
 
             await CFproblems.create(problem);
+
+            if (solution) {
+                await CFsolutions.create(solution);
+            }
+
             res.status(200).send("Problem added successfully");
         }
         catch (err) {
+            console.log(err);
             res.status(400).send(err.message);
         }
 
@@ -126,57 +132,15 @@ export default class adminC {
             }
 
             await leetcodeQuestion.create(problem);
+
+            if (solution) {
+                await LeetCodeSolution.create(solution);
+            }
+
             res.status(200).send("Problem added successfully");
         }
         catch (err) {
-            res.status(400).send(err.message);
-        }
-    }
-
-    async addCFSolution(req, res) {
-        const { email, password, solution } = req.body;
-        if (email !== process.env.ADMIN_EMAIL) {
-            return res.status(403).send("Access Denied");
-        }
-        const admin = await User.findOne({ email });
-        if (!admin) {
-            return res.status(400).send("Admin not found");
-        }
-
-        const isMatch = await bcrypt.compare(password, admin.password);
-        if (!isMatch) {
-            return res.status(400).send("Invalid Credentials");
-        }
-
-        try {
-            await CFsolutions.create(solution);
-            res.status(200).send("Solution added successfully");
-        }
-        catch (err) {
-            res.status(400).send(err.message);
-        }
-    }
-
-    async addLCSolution(req, res) {
-        const { email, password, solution } = req.body;
-        if (email !== process.env.ADMIN_EMAIL) {
-            return res.status(403).send("Access Denied");
-        }
-        const admin = await User.findOne({ email });
-        if (!admin) {
-            return res.status(400).send("Admin not found");
-        }
-
-        const isMatch = await bcrypt.compare(password, admin.password);
-        if (!isMatch) {
-            return res.status(400).send("Invalid Credentials");
-        }
-
-        try {
-            await LeetCodeSolution.create(solution);
-            res.status(200).send("Solution added successfully");
-        }
-        catch (err) {
+            console.log(err);
             res.status(400).send(err.message);
         }
     }

@@ -11,13 +11,7 @@ adminRouter.post("/addLCProblem", (req, res) => {
    adminController.addLCProblem(req, res);
 })
 
-adminRouter.post("/addCFSolution", (req, res) => {
-   adminController.addCFSolution(req, res);
-})
 
-adminRouter.post("/addLCSolution", (req, res) => {
-   adminController.addLCSolution(req, res);
-})
 
 
 
