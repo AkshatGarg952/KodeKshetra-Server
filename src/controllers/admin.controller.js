@@ -22,7 +22,7 @@ async function generateHiddenTests(problem, solution, platform) {
         const testInputsResponse = await axios.post(`${hiddenForcesUrl}${endpoint}`, {
             problem: problem
         }, {
-            timeout: 60000
+            timeout: 300000
         });
 
         const hiddenTestInputs = testInputsResponse.data.hiddenTestCases || [];
@@ -64,7 +64,7 @@ async function generateHiddenTests(problem, solution, platform) {
 export default class adminC {
     async addCFProblem(req, res) {
         const { email, password, problem, solution } = req.body;
-        if (email !== process.env.ADMIN_EMAI) {
+        if (email !== process.env.ADMIN_EMAIL) {
             return res.status(403).send("Access Denied");
         }
         const admin = await User.findOne({ email });
@@ -101,7 +101,7 @@ export default class adminC {
 
     async addLCProblem(req, res) {
         const { email, password, problem, solution } = req.body;
-        if (email !== process.env.ADMIN_EMAI) {
+        if (email !== process.env.ADMIN_EMAIL) {
             return res.status(403).send("Access Denied");
         }
         const admin = await User.findOne({ email });
@@ -135,7 +135,7 @@ export default class adminC {
 
     async addCFSolution(req, res) {
         const { email, password, solution } = req.body;
-        if (email !== process.env.ADMIN_EMAI) {
+        if (email !== process.env.ADMIN_EMAIL) {
             return res.status(403).send("Access Denied");
         }
         const admin = await User.findOne({ email });
@@ -159,7 +159,7 @@ export default class adminC {
 
     async addLCSolution(req, res) {
         const { email, password, solution } = req.body;
-        if (email !== process.env.ADMIN_EMAI) {
+        if (email !== process.env.ADMIN_EMAIL) {
             return res.status(403).send("Access Denied");
         }
         const admin = await User.findOne({ email });
