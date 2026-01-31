@@ -2,7 +2,7 @@ import redisClient, { isRedisAvailable } from "./redisClient.js";
 
 async function cancelMatchmaking({ userId, mode, topic }) {
   if (!isRedisAvailable()) {
-    console.warn('⚠️ Redis is not available. Cannot cancel matchmaking.');
+    console.warn('Redis is not available. Cannot cancel matchmaking.');
     return false;
   }
 

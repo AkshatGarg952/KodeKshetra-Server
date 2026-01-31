@@ -39,7 +39,7 @@ export async function updateLeaderboard({ key, days }) {
 
   try {
     if (!isRedisAvailable()) {
-      console.warn('⚠️ Redis is not available. Cannot update leaderboard.');
+      console.warn('Redis is not available. Cannot update leaderboard.');
       return;
     }
 

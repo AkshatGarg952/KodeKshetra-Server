@@ -11,7 +11,7 @@ const initializeRedis = async () => {
         connectTimeout: 5000,
         reconnectStrategy: (retries) => {
           if (retries > 3) {
-            console.log("❌ Redis connection failed after 3 retries. Running without Redis.");
+            console.log("Redis connection failed after 3 retries. Running without Redis.");
             return false;
           }
           return Math.min(retries * 100, 3000);
@@ -25,12 +25,12 @@ const initializeRedis = async () => {
     });
 
     client.on("connect", () => {
-      console.log("✅ Connected to Redis successfully");
+      console.log("Connected to Redis successfully");
       isRedisConnected = true;
     });
 
     client.on("disconnect", () => {
-      console.log("⚠️ Redis disconnected");
+      console.log("Redis disconnected");
       isRedisConnected = false;
     });
 
@@ -38,8 +38,8 @@ const initializeRedis = async () => {
     redisClient = client;
     return client;
   } catch (error) {
-    console.error("⚠️ Failed to connect to Redis:", error.message);
-    console.log("📌 Application will continue without Redis. Matchmaking and leaderboard features may be limited.");
+    console.error("Failed to connect to Redis:", error.message);
+    console.log("Application will continue without Redis. Matchmaking and leaderboard features may be limited.");
     return null;
   }
 };

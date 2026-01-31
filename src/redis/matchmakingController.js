@@ -2,7 +2,7 @@ import redisClient, { isRedisAvailable } from './redisClient.js';
 
 async function addUserToQueue({ userId, mode, topic, rating }) {
   if (!isRedisAvailable()) {
-    console.warn('⚠️ Redis is not available. Matchmaking is disabled.');
+    console.warn('Redis is not available. Matchmaking is disabled.');
     throw new Error('Matchmaking service is currently unavailable');
   }
 
@@ -23,7 +23,7 @@ async function addUserToQueue({ userId, mode, topic, rating }) {
 
   // Add user to Redis queue
   await redisClient.lPush(queueKey, JSON.stringify(userData));
-  console.log(`✅ User ${userId} added to queue ${queueKey}`);
+  console.log(`User ${userId} added to queue ${queueKey}`);
 }
 
 export default addUserToQueue;

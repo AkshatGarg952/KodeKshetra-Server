@@ -83,7 +83,7 @@ app.use('/api/admin', adminRouter);
 app.get("/leaderboard/:period/:page", async (req, res) => {
   const period = req.params.period;
   const page = parseInt(req.params.page, 10);
-  
+
   if (Number.isNaN(page) || page < 1) {
     return res.status(400).json({ message: "Invalid page number" });
   }
@@ -214,7 +214,7 @@ io.on('connection', (socket) => {
       if (!user) {
         socket.emit("cancelMatchmakingResponse", {
           success: false,
-          message: "❌ Cannot find the user!"
+          message: "Cannot find the user!"
         });
         return;
       }
@@ -224,12 +224,12 @@ io.on('connection', (socket) => {
       if (success) {
         socket.emit("cancelMatchmakingResponse", {
           success: true,
-          message: "✅ Matchmaking cancelled successfully."
+          message: "Matchmaking cancelled successfully."
         });
       } else {
         socket.emit("cancelMatchmakingResponse", {
           success: false,
-          message: "⚠️ Could not cancel matchmaking (maybe not in queue)."
+          message: "Could not cancel matchmaking (maybe not in queue)."
         });
       }
 
@@ -237,7 +237,7 @@ io.on('connection', (socket) => {
       console.error("Cancel matchmaking error:", err.message);
       socket.emit("cancelMatchmakingResponse", {
         success: false,
-        message: "⚠️ Server error while cancelling matchmaking."
+        message: "Server error while cancelling matchmaking."
       });
     }
   });
@@ -495,5 +495,5 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || process.env.PORT_NO || 5000;
 server.listen(PORT, () => {
   connectDB();
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });

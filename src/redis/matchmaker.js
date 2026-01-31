@@ -6,7 +6,7 @@ import getQuestionForBattle from "../helper/Questions/fetchQuestion.js";
 
 async function tryToMatch(mode, topic, io, onlineUsers) {
   if (!isRedisAvailable()) {
-    console.warn('⚠️ Redis is not available. Cannot perform matchmaking.');
+    console.warn('Redis is not available. Cannot perform matchmaking.');
     return;
   }
 

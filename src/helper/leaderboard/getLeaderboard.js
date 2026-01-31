@@ -23,7 +23,7 @@ export default async function getPaginatedLeaderboardFromRedis(
       { REV: true }
     );
 
-    
+
 
     if (!raw || raw.length === 0) {
       return { result: [], hasNextPage: false };
@@ -39,12 +39,12 @@ export default async function getPaginatedLeaderboardFromRedis(
       scoresMap[i.value] = i.score;
     });
 
-    // ✅ VALIDATE ObjectIds
+    // Validate ObjectIds before querying MongoDB
     const validObjectIds = redisIds
       .filter(id => mongoose.Types.ObjectId.isValid(id))
       .map(id => new mongoose.Types.ObjectId(id));
 
-    // 🚨 If Redis contains invalid IDs → do NOT query Mongo
+    // Skip MongoDB query if Redis contains invalid IDs
     if (validObjectIds.length === 0) {
       return { result: [], hasNextPage };
     }
