@@ -40,7 +40,7 @@ const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cors({
-  origin: true,
+  origin: ['https://kode-kshetra-client.vercel.app', 'http://localhost:5173', 'http://127.0.0.1:5173'],
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true
 }));
@@ -62,23 +62,6 @@ app.get("/api/health", (req, res) => {
 app.use('/api/users', userRouter);
 
 app.use('/api/admin', adminRouter);
-// app.get("/leaderboard/:period/:page", async (req, res) => {
-//   const { period, page } = req.params;
-//   try {
-//     const { result, hasNextPage } = await getPaginatedLeaderboardFromRedis(
-//       `leaderboard:${period}`,
-//       page
-//     );
-//     console.log(result)
-//     res.status(200).json({
-//       data: result,
-//       isNextPage: hasNextPage
-//     });
-//   } catch (err) {
-//     console.error("Error fetching leaderboard:", err);
-//     res.status(500).json({ message: "Failed to load leaderboard." });
-//   }
-// });
 
 app.get("/leaderboard/:period/:page", async (req, res) => {
   const period = req.params.period;
