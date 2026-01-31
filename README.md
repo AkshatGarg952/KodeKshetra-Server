@@ -24,7 +24,7 @@ The **server** handles authentication, matchmaking, AI-based test generation, an
 
 ---
 
-## 🏗️ Project Structure
+## Project Structure
 
 ```
 KodeKshetra-Server/
@@ -560,7 +560,7 @@ POST /api/admin/addLCProblem
 
 ---
 
-## 📜 License
+## License
 
 Licensed under the **MIT License**.
 
@@ -578,11 +578,11 @@ Licensed under the **MIT License**.
 
 ---
 
-## 👨‍💻 Author
+## Author
 
 **Akshat Garg**
 - GitHub: [@AkshatGarg952](https://github.com/AkshatGarg952)
 
 ---
 
-⭐ Star this repository if you find it helpful!
+Star this repository if you find it helpful!
