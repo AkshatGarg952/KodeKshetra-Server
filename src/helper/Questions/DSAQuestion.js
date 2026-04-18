@@ -1,26 +1,31 @@
 import leetcodeQuestion from "../../models/leetcode_questions.model.js";
 
+const pickRandomQuestion = async (match = {}) => {
+    const [question] = await leetcodeQuestion.aggregate([
+        { $match: match },
+        { $sample: { size: 1 } }
+    ]);
+
+    return question || null;
+};
+
 const getDSAQuestion = async (battle, user1Solved, user2Solved) => {
-    const allQuestions = await leetcodeQuestion.find();
+    const solvedIds = [...new Set([
+        ...user1Solved.map((question) => question.problemId),
+        ...user2Solved.map((question) => question.problemId)
+    ])];
 
-    const topicQuestions = allQuestions.filter((question) =>
-        question.tags && question.tags.includes(battle.topic)
-    );
+    let finalQuestion = await pickRandomQuestion({
+        tags: battle.topic,
+        problemId: { $nin: solvedIds }
+    });
 
-    const user1SolvedIds = new Set(user1Solved.map(q => q.problemId));
-    const user2SolvedIds = new Set(user2Solved.map(q => q.problemId));
+    if (!finalQuestion) {
+        finalQuestion = await pickRandomQuestion({ tags: battle.topic });
+    }
 
-    const suitableQuestions = topicQuestions.filter((question) =>
-        !user1SolvedIds.has(question.problemId) &&
-        !user2SolvedIds.has(question.problemId)
-    );
-
-    let finalQuestion;
-
-    if (suitableQuestions.length === 0) {
-        finalQuestion = allQuestions[Math.floor(Math.random() * allQuestions.length)];
-    } else {
-        finalQuestion = suitableQuestions[Math.floor(Math.random() * suitableQuestions.length)];
+    if (!finalQuestion) {
+        finalQuestion = await pickRandomQuestion();
     }
 
     return finalQuestion;

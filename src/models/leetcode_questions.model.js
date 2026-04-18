@@ -64,5 +64,7 @@ const leetcodeQuestionSchema = new Schema({
   }
 }, { timestamps: true });
 
+leetcodeQuestionSchema.index({ tags: 1 });
+
 const leetcodeQuestion = mongoose.model('leetcode_questions', leetcodeQuestionSchema);
 export default leetcodeQuestion;

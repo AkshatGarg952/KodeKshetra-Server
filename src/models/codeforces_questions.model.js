@@ -17,5 +17,7 @@ const problemSchema = new Schema({
   rating:{ type: Number}
 });
 
+problemSchema.index({ tags: 1, rating: 1 });
+
 const CFproblems =  mongoose.model("codeforces_questions", problemSchema);
 export default CFproblems

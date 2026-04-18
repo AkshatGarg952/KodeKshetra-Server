@@ -8,10 +8,24 @@ import codeforcesData from '../helper/fetchProfile/fetchCodeforces.js';
 import badgesData from '../models/badge.model.js';
 dotenv.config();
 
+const sanitizeUser = (user) => ({
+  _id: user._id,
+  username: user.username,
+  email: user.email,
+  profilePicture: user.profilePicture,
+  sections: user.sections,
+  leetcodeId: user.leetcodeId,
+  codeforcesId: user.codeforcesId,
+  rating: user.rating,
+  currStreak: user.currStreak,
+  maxStreak: user.maxStreak,
+  currWinStreak: user.currWinStreak,
+  maxWinStreak: user.maxWinStreak,
+});
+
 export default class UserC {
   async register(req, res) {
     const { username, password, email, leetcodeId, codeforcesId } = req.body;
-    console.log(req.body);
 
     try {
       if (await User.findOne({ email })) {
@@ -45,14 +59,15 @@ export default class UserC {
           newUser.sections.cp = true;
         }
         catch (err) {
-          console.log("cf", err.message)
+          console.error("Codeforces sync failed:", err.message);
+          await User.findByIdAndDelete(newUser._id);
           return res.status(500).json({ message: "Server error: " + err.message });
         }
       }
       await newUser.save();
-      const n = await User.findById(newUser._id)
+      const createdUser = await User.findById(newUser._id);
       const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: "24h" });
-      res.status(200).json({ n, token });
+      res.status(200).json({ user: sanitizeUser(createdUser), token });
     }
 
     catch (err) {
@@ -76,7 +91,7 @@ export default class UserC {
         return res.status(400).json({ message: "Please check the credentials that you have entered!" });
       }
       const token = jwt.sign({ id: oldUser._id }, process.env.JWT_SECRET, { expiresIn: "24h" });
-      res.status(200).json({ oldUser, token });
+      res.status(200).json({ user: sanitizeUser(oldUser), token });
 
     }
 
@@ -87,9 +102,12 @@ export default class UserC {
 
   async update(req, res) {
     const userId = req.params.id;
-    console.log("Updating user:", userId);
 
     try {
+      if (!req.user || req.user.id !== userId) {
+        return res.status(403).json({ message: "Forbidden: You can only update your own profile." });
+      }
+
       const user = await User.findById(userId);
       if (!user) {
         return res.status(404).json({ message: "User does not exist!" });
@@ -108,16 +126,14 @@ export default class UserC {
       }
 
       for (const field of updates) {
-
         user[field] = req.body[field];
-
       }
 
-      console.log("Updated User", await user.save());
+      await user.save();
 
       return res.status(200).json({
         message: "User updated successfully!",
-        user,
+        user: sanitizeUser(user),
       });
     } catch (err) {
       console.error(err);
@@ -128,7 +144,6 @@ export default class UserC {
 
   async getUserDetails(req, res) {
     const userId = req.params.userId;
-    console.log(userId);
 
     const startDate = dayjs().subtract(89, "day").startOf("day").toDate();
 
@@ -156,8 +171,6 @@ export default class UserC {
           battles: counts[formatted] || 0
         });
       }
-
-      console.log(heatmap);
 
       let badgesCount = 0;
       user.earnedBadges.forEach(badge => {
@@ -195,8 +208,6 @@ export default class UserC {
         username: user.username,
         badgesData: badges
       }
-
-      console.log(ans.badgesCount);
 
       res.status(200).send(ans);
     } catch (err) {

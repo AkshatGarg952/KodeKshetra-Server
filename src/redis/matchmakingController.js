@@ -1,29 +1,34 @@
 import redisClient, { isRedisAvailable } from './redisClient.js';
 
+const getQueueKey = (mode, topic) => `${mode}:${topic}`;
+const getQueueMemberKey = (mode, topic) => `queue-members:${mode}:${topic}`;
+
 async function addUserToQueue({ userId, mode, topic, rating }) {
   if (!isRedisAvailable()) {
     console.warn('Redis is not available. Matchmaking is disabled.');
     throw new Error('Matchmaking service is currently unavailable');
   }
 
-  const finalTopic = topic;
-  const queueKey = `${mode}:${finalTopic}`;
+  const queueKey = getQueueKey(mode, topic);
+  const membershipKey = getQueueMemberKey(mode, topic);
+  const userData = {
+    userId,
+    topic,
+    rating,
+    joinedAt: Date.now()
+  };
 
-  const userData = { userId, finalTopic, rating };
-
-  // Check if user already exists in queue
-  const existingQueue = await redisClient.lRange(queueKey, 0, -1);
-  for (const user of existingQueue) {
-    const parsed = JSON.parse(user);
-    if (parsed.userId === userId) {
-      console.log(`User ${userId} already in queue ${queueKey}, skipping.`);
-      return;
-    }
+  const wasAdded = await redisClient.sAdd(membershipKey, userId);
+  if (!wasAdded) {
+    return;
   }
 
-  // Add user to Redis queue
-  await redisClient.lPush(queueKey, JSON.stringify(userData));
-  console.log(`User ${userId} added to queue ${queueKey}`);
+  try {
+    await redisClient.rPush(queueKey, JSON.stringify(userData));
+  } catch (error) {
+    await redisClient.sRem(membershipKey, userId);
+    throw error;
+  }
 }
 
 export default addUserToQueue;

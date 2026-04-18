@@ -5,12 +5,9 @@ const battleUpdate = async (player) => {
   const startOfDay = new Date(today.setHours(0, 0, 0, 0));
   try {
     const battleResult = player.status;
-
-    // Build the update object based on battle result
     const updateQuery = {};
 
     if (battleResult === "won") {
-      // Find if today's entry exists
       const user = await User.findById(player.id);
       if (!user) return;
 
@@ -18,12 +15,10 @@ const battleUpdate = async (player) => {
       const hasBattlesToday = user.totalB.some(entry => entry.date >= startOfDay);
 
       if (hasWonToday) {
-        // Increment existing entry
         updateQuery.$inc = {
           "totalW.$[wonElem].battlesWon": 1
         };
       } else {
-        // Add new entry
         updateQuery.$push = {
           totalW: { date: new Date(), battlesWon: 1 }
         };
@@ -67,11 +62,11 @@ const battleUpdate = async (player) => {
 
       if (hasDrawToday) {
         updateQuery.$inc = {
-          "totalD.$[drawElem].battlesWon": 1
+          "totalD.$[drawElem].battlesDraw": 1
         };
       } else {
         updateQuery.$push = {
-          totalD: { date: new Date(), battlesWon: 1 }
+          totalD: { date: new Date(), battlesDraw: 1 }
         };
       }
 
@@ -131,11 +126,8 @@ const battleUpdate = async (player) => {
         );
       }
     }
-
-    console.log("Battle stats updated for user:", player.id);
   } catch (error) {
     console.error("Error updating battle stats:", error);
-    // Optionally implement retry logic here
   }
 };
 

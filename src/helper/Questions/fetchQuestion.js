@@ -5,8 +5,8 @@ const getQuestionForBattle = async (battle, user1, user2) => {
   const user1Solved = user1?.solvedQuestions ?? [];
   const user2Solved = user2?.solvedQuestions ?? [];
 
-  const user1CF = user1?.rating?.codeforces ?? 0;
-  const user2CF = user2?.rating?.codeforces ?? 0;
+  const user1CF = user1?.rating?.cp ?? 0;
+  const user2CF = user2?.rating?.cp ?? 0;
 
   if (battle.mode === "cp") {
     

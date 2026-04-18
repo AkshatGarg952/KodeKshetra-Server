@@ -13,7 +13,7 @@ userRouter.post("/login", (req, res) => {
    userController.login(req, res);
 })
 
-userRouter.put("/update/:id", upload.single('ProfilePicture'), (req, res) => {
+userRouter.put("/update/:id", jwt, upload.single('ProfilePicture'), (req, res) => {
    userController.update(req, res);
 })
 

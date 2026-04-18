@@ -1,31 +1,43 @@
 import CFproblems from "../../models/codeforces_questions.model.js";
 
+const pickRandomQuestion = async (match = {}) => {
+    const [question] = await CFproblems.aggregate([
+        { $match: match },
+        { $sample: { size: 1 } }
+    ]);
+
+    return question || null;
+};
+
 const getCPQuestion = async (battle, maxRating, user1Solved, user2Solved) => {
-    const allQuestions = await CFproblems.find();
+    const solvedIds = [...new Set([
+        ...user1Solved.map((question) => question.problemId),
+        ...user2Solved.map((question) => question.problemId)
+    ])];
+    const lowerBound = Math.max((maxRating || 0) - 300, 0);
 
-    const topicQuestions = allQuestions.filter((question) =>
-        question.tags && question.tags.includes(battle.topic)
-    );
+    let finalQuestion = await pickRandomQuestion({
+        tags: battle.topic,
+        problemId: { $nin: solvedIds },
+        rating: {
+            $gte: lowerBound,
+            $lte: maxRating || lowerBound + 300
+        }
+    });
 
-    const user1SolvedIds = new Set(user1Solved.map(q => q.problemId));
-    const user2SolvedIds = new Set(user2Solved.map(q => q.problemId));
+    if (!finalQuestion) {
+        finalQuestion = await pickRandomQuestion({
+            tags: battle.topic,
+            problemId: { $nin: solvedIds }
+        });
+    }
 
-    const unsolvedQuestions = topicQuestions.filter((question) =>
-        !user1SolvedIds.has(question.problemId) &&
-        !user2SolvedIds.has(question.problemId)
-    );
+    if (!finalQuestion) {
+        finalQuestion = await pickRandomQuestion({ tags: battle.topic });
+    }
 
-    let suitableQuestions = unsolvedQuestions.filter((question) =>
-        question.rating <= maxRating &&
-        question.rating >= (maxRating - 300)
-    );
-
-    let finalQuestion;
-
-    if (suitableQuestions.length === 0) {
-        finalQuestion = allQuestions[Math.floor(Math.random() * allQuestions.length)];
-    } else {
-        finalQuestion = suitableQuestions[Math.floor(Math.random() * suitableQuestions.length)];
+    if (!finalQuestion) {
+        finalQuestion = await pickRandomQuestion();
     }
 
     return finalQuestion;

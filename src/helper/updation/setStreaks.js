@@ -1,4 +1,3 @@
-import { set } from "mongoose";
 import User from "../../models/user.model.js";
 
 const setStreaks = async(player)=>{
@@ -15,7 +14,7 @@ const setStreaks = async(player)=>{
   }
 
   await user.save();
-  updateDailyStreaks(player)
+  await updateDailyStreaks(player);
 
 }
 
@@ -34,13 +33,17 @@ async function updateDailyStreaks(player) {
     return battleDate.getTime() === yesterdayDate.getTime();
   });
 
-    const playedToday = user.totalB.some(b => {
+  const playedTodayEntry = user.totalB.find(b => {
     const battleDate = new Date(b.date);
     battleDate.setHours(0, 0, 0, 0);
     return battleDate.getTime() === todayDate.getTime();
   });
 
-  if (playedToday) {
+  if (!playedTodayEntry) {
+    return;
+  }
+
+  if ((playedTodayEntry.battlesPlayed || 0) > 1) {
     return;
   }
   

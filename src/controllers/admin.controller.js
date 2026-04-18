@@ -1,149 +1,256 @@
-import CFproblems from "../models/codeforces_questions.model.js";
-import leetcodeQuestion from "../models/leetcode_questions.model.js";
-import CFsolutions from "../models/codeforces_solutions.model.js";
-import LeetCodeSolution from "../models/leetcode_solutions.model.js";
-import bcrypt from 'bcrypt'
-import User from "../models/user.model.js"
-import axios from 'axios';
-import dotenv from 'dotenv';
+import dotenv from "dotenv";
+import User from "../models/user.model.js";
+import detectPlatform from "../importers/detectPlatform.js";
+import importCodeforcesProblem from "../importers/codeforcesImporter.js";
+import importLeetCodeProblem from "../importers/leetcodeImporter.js";
+import normalizeProblem from "../importers/normalizeProblem.js";
+import validateImportedSolution from "../importers/validateImportedSolution.js";
+import generateHiddenTests from "../importers/generateHiddenTests.js";
+import persistImportedProblem, { findExistingProblem } from "../importers/persistImportedProblem.js";
+import { createImportError, createImportLogger } from "../importers/importLogger.js";
 
 dotenv.config();
 
-async function generateHiddenTests(problem, solution, platform) {
-    try {
-        const hiddenForcesUrl = process.env.HIDDEN_FORCES_URL || 'http://127.0.0.1:8000';
-        const codeRunnerUrl = process.env.CODE_RUNNER_URL || 'http://127.0.0.1:9000';
-        const endpoint = platform === 'codeforces'
-            ? '/generate-codeforces-tests'
-            : '/generate-leetcode-tests';
+const SUPPORTED_LANGUAGES = new Set(["python", "cpp", "java"]);
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@gmail.com";
 
-        console.log(`Calling Hidden Forces API: ${hiddenForcesUrl}${endpoint}`);
+async function authenticateAdmin(adminId) {
+  const admin = await User.findById(adminId);
+  if (!admin) {
+    throw createImportError("Admin not found", { statusCode: 400, stage: "auth" });
+  }
 
-        const testInputsResponse = await axios.post(`${hiddenForcesUrl}${endpoint}`, {
-            problem: problem
-        }, {
-            timeout: 300000
-        });
+  if ((admin.email || "").toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+    throw createImportError("Access Denied", { statusCode: 403, stage: "auth" });
+  }
 
-        const hiddenTestInputs = testInputsResponse.data.hiddenTestCases || [];
-        console.log(`Generated ${hiddenTestInputs.length} hidden test inputs`);
+  return admin;
+}
 
-        if (hiddenTestInputs.length === 0) {
-            console.warn('No hidden test cases generated');
-            return [];
-        }
+function validateSolutionInput(solution = {}) {
+  if (!solution.code || typeof solution.code !== "string") {
+    throw createImportError("Solution code is required", { statusCode: 400, stage: "input-validation" });
+  }
 
-        console.log('Generating outputs for hidden test cases...');
-        const hiddenTestsWithOutputs = await axios.post(`${codeRunnerUrl}/execute`, {
-            code: solution.code,
-            language: solution.language,
-            problem: {
-                ...problem,
-                testCases: hiddenTestInputs
-            }
-        }, {
-            timeout: 60000
-        });
+  if (!solution.language || !SUPPORTED_LANGUAGES.has(solution.language)) {
+    throw createImportError(`Unsupported solution language. Supported: ${[...SUPPORTED_LANGUAGES].join(", ")}`, {
+      statusCode: 400,
+      stage: "input-validation",
+    });
+  }
+}
 
-        const outputs = hiddenTestsWithOutputs.data.outputs || [];
-        console.log(`Generated ${outputs.length} outputs`);
+function getImporter(platform) {
+  if (platform === "codeforces") {
+    return importCodeforcesProblem;
+  }
 
-        const hiddenTests = hiddenTestInputs.map((testInput, index) => ({
-            input: testInput.input || testInput,
-            output: outputs[index] || ''
-        }));
+  if (platform === "leetcode") {
+    return importLeetCodeProblem;
+  }
 
-        return hiddenTests;
+  throw new Error("No importer available for platform");
+}
 
-    } catch (err) {
-        console.error('Error generating hidden tests:', err.message);
-        return [];
-    }
+function sendError(res, error, logger) {
+  const statusCode = error.statusCode || 500;
+  logger?.error(error.stage || "unknown", error.message || "Unknown error", {
+    statusCode,
+    details: error.details || null,
+    cause: error.cause?.message || null,
+  });
+  return res.status(statusCode).json({
+    success: false,
+    requestId: logger?.requestId || null,
+    stage: error.stage || "unknown",
+    message: error.message || "Unknown error",
+    details: error.details || null,
+  });
+}
+
+async function buildAndPersistProblem({
+  url,
+  solution,
+  logger,
+}) {
+  logger.info("platform-detection", "Detecting platform from URL", { url });
+  const detection = detectPlatform(url);
+  logger.info("platform-detection", "Detected supported platform", {
+    platform: detection.platform,
+    normalizedUrl: detection.normalizedUrl,
+    problemId: detection.metadata.problemId,
+  });
+  const importer = getImporter(detection.platform);
+  const scrapedProblem = await importer({
+    normalizedUrl: detection.normalizedUrl,
+    metadata: detection.metadata,
+    logger,
+  });
+  const normalizedProblem = normalizeProblem(detection.platform, scrapedProblem);
+  logger.info("normalization", "Normalized imported problem", {
+    problemId: normalizedProblem.problemId,
+    source: normalizedProblem.source,
+  });
+  const existingProblem = await findExistingProblem(detection.platform, normalizedProblem.problemId);
+
+  if (existingProblem) {
+    throw createImportError(`Problem ${normalizedProblem.problemId} already exists in the database`, {
+      statusCode: 409,
+      stage: "duplicate-check",
+      details: { problemId: normalizedProblem.problemId },
+    });
+  }
+
+  await validateImportedSolution(normalizedProblem, solution, logger);
+  const hiddenTests = await generateHiddenTests(normalizedProblem, solution, detection.platform, logger);
+  normalizedProblem.hiddenTests = hiddenTests;
+
+  const { savedQuestion, savedSolution } = await persistImportedProblem({
+    platform: detection.platform,
+    problem: normalizedProblem,
+    solution,
+    sourceUrl: detection.normalizedUrl,
+    logger,
+  });
+
+  return {
+    platform: detection.platform,
+    normalizedUrl: detection.normalizedUrl,
+    normalizedProblem,
+    hiddenTests,
+    savedQuestion,
+    savedSolution,
+  };
 }
 
 export default class adminC {
-    async addCFProblem(req, res) {
-        const { email, password, problem, solution } = req.body;
-        if (email !== process.env.ADMIN_EMAIL) {
-            return res.status(403).send("Access Denied");
-        }
-        const admin = await User.findOne({ email });
-        if (!admin) {
-            return res.status(400).send("Admin not found");
-        }
+  async addCFProblem(req, res) {
+    const { problem, solution } = req.body;
+    const logger = createImportLogger();
 
-        const isMatch = await bcrypt.compare(password, admin.password);
-        if (!isMatch) {
-            return res.status(400).send("Invalid Credentials");
-        }
+    try {
+      logger.info("manual-add-cf", "Received manual Codeforces problem add request", {
+        problemId: problem?.problemId || null,
+      });
+      await authenticateAdmin(req.user?.id);
+      const normalizedProblem = {
+        ...problem,
+        source: "codeforces",
+      };
 
-        try {
-            problem.source = "codeforces";
+      if (solution?.code && solution?.language) {
+        validateSolutionInput(solution);
+        normalizedProblem.hiddenTests = await generateHiddenTests(normalizedProblem, solution, "codeforces", logger);
+      } else {
+        normalizedProblem.hiddenTests = [];
+      }
 
-            if (solution && solution.code && solution.language) {
-                console.log('Generating hidden test cases for Codeforces problem...');
-                const hiddenTests = await generateHiddenTests(problem, solution, 'codeforces');
-                problem.hiddenTests = hiddenTests;
-                console.log(`Added ${hiddenTests.length} hidden test cases to problem`);
-            } else {
-                console.warn('No solution provided, skipping hidden test generation');
-            }
+      const { savedQuestion, savedSolution } = await persistImportedProblem({
+        platform: "codeforces",
+        problem: normalizedProblem,
+        solution: {
+          problemId: normalizedProblem.problemId,
+          ...solution,
+        },
+        sourceUrl: problem.url || "",
+        logger,
+      });
 
-            await CFproblems.create(problem);
-
-            if (solution) {
-                await CFsolutions.create(solution);
-            }
-
-            res.status(200).send("Problem added successfully");
-        }
-        catch (err) {
-            console.log(err);
-            res.status(400).send(err.message);
-        }
-
-
+      return res.status(200).json({
+        success: true,
+        requestId: logger.requestId,
+        message: "Problem added successfully",
+        questionId: savedQuestion._id,
+        solutionId: savedSolution?._id || null,
+        hiddenTestsGenerated: normalizedProblem.hiddenTests.length,
+      });
+    } catch (error) {
+      return sendError(res, error, logger);
     }
+  }
 
-    async addLCProblem(req, res) {
-        const { email, password, problem, solution } = req.body;
-        if (email !== process.env.ADMIN_EMAIL) {
-            return res.status(403).send("Access Denied");
-        }
-        const admin = await User.findOne({ email });
-        if (!admin) {
-            return res.status(400).send("Admin not found");
-        }
+  async addLCProblem(req, res) {
+    const { problem, solution } = req.body;
+    const logger = createImportLogger();
 
-        const isMatch = await bcrypt.compare(password, admin.password);
-        if (!isMatch) {
-            return res.status(400).send("Invalid Credentials");
-        }
-        try {
-            problem.source = "leetcode";
+    try {
+      logger.info("manual-add-lc", "Received manual LeetCode problem add request", {
+        problemId: problem?.problemId || null,
+      });
+      await authenticateAdmin(req.user?.id);
+      const normalizedProblem = {
+        ...problem,
+        source: "leetcode",
+      };
 
-            if (solution && solution.code && solution.language) {
-                console.log('Generating hidden test cases for LeetCode problem...');
-                const hiddenTests = await generateHiddenTests(problem, solution, 'leetcode');
-                problem.hiddenTests = hiddenTests;
-                console.log(`Added ${hiddenTests.length} hidden test cases to problem`);
-            } else {
-                console.warn('No solution provided, skipping hidden test generation');
-            }
+      if (solution?.code && solution?.language) {
+        validateSolutionInput(solution);
+        normalizedProblem.hiddenTests = await generateHiddenTests(normalizedProblem, solution, "leetcode", logger);
+      } else {
+        normalizedProblem.hiddenTests = [];
+      }
 
-            await leetcodeQuestion.create(problem);
+      const { savedQuestion, savedSolution } = await persistImportedProblem({
+        platform: "leetcode",
+        problem: normalizedProblem,
+        solution: {
+          problemId: normalizedProblem.problemId,
+          ...solution,
+        },
+        sourceUrl: problem.url || "",
+        logger,
+      });
 
-            if (solution) {
-                await LeetCodeSolution.create(solution);
-            }
-
-            res.status(200).send("Problem added successfully");
-        }
-        catch (err) {
-            console.log(err);
-            res.status(400).send(err.message);
-        }
+      return res.status(200).json({
+        success: true,
+        requestId: logger.requestId,
+        message: "Problem added successfully",
+        questionId: savedQuestion._id,
+        solutionId: savedSolution?._id || null,
+        hiddenTestsGenerated: normalizedProblem.hiddenTests.length,
+      });
+    } catch (error) {
+      return sendError(res, error, logger);
     }
+  }
 
+  async importProblem(req, res) {
+    const { url, solution } = req.body;
+    const logger = createImportLogger();
 
+    try {
+      logger.info("import-request", "Received problem import request", {
+        url,
+        language: solution?.language || null,
+      });
+      await authenticateAdmin(req.user?.id);
+
+      if (!url || typeof url !== "string") {
+        throw createImportError("Problem URL is required", { statusCode: 400, stage: "input-validation" });
+      }
+
+      validateSolutionInput(solution);
+
+      const result = await buildAndPersistProblem({
+        url,
+        solution,
+        logger,
+      });
+
+      return res.status(200).json({
+        success: true,
+        requestId: logger.requestId,
+        platform: result.platform,
+        problemId: result.normalizedProblem.problemId,
+        title: result.normalizedProblem.title,
+        url: result.normalizedUrl,
+        sampleValidationPassed: true,
+        hiddenTestsGenerated: result.hiddenTests.length,
+        questionSaved: Boolean(result.savedQuestion),
+        solutionSaved: Boolean(result.savedSolution),
+      });
+    } catch (error) {
+      return sendError(res, error, logger);
+    }
+  }
 }
