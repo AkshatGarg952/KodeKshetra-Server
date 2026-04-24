@@ -25,9 +25,10 @@ import leetcodeQuestion from "./src/models/leetcode_questions.model.js";
 import CFproblems from "./src/models/codeforces_questions.model.js";
 import { refreshLeaderboardEntries } from './src/helper/leaderboard/scoreCalculation.js';
 import createAIBattle from './src/helper/ai/createAIBattle.js';
-import runLiveAIBattleExecution from './src/helper/ai/liveAIBattleExecution.js';
+import runLiveAIBattleExecution, { persistFallbackAIExecution } from './src/helper/ai/liveAIBattleExecution.js';
 import resolveAIBattleOutcome from './src/helper/ai/resolveAIBattleOutcome.js';
 import applyAIBattleRewards from './src/helper/ai/applyAIBattleRewards.js';
+import { getRedisHealth, getRedisStatus } from './src/redis/redisClient.js';
 
 dotenv.config();
 
@@ -200,6 +201,27 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+app.get("/api/redis-health", async (req, res) => {
+  try {
+    const redisHealth = await getRedisHealth();
+    const statusCode = redisHealth.status === 'ok' ? 200 : 503;
+
+    res.status(statusCode).json({
+      service: 'Redis',
+      timestamp: new Date().toISOString(),
+      ...redisHealth
+    });
+  } catch (error) {
+    res.status(500).json({
+      service: 'Redis',
+      timestamp: new Date().toISOString(),
+      status: 'error',
+      connected: false,
+      lastError: error?.message || 'Unknown Redis health check error'
+    });
+  }
+});
+
 app.use('/api/users', userRouter);
 app.use('/api/admin', adminRouter);
 
@@ -299,7 +321,9 @@ const battleSubmissions = new Map();
 const battles = new Map();
 const processingBattles = new Set();
 const activeAIBattleExecutions = new Map();
+const pendingAIBattleSetups = new Map();
 const BATTLE_DURATION_SECONDS = Number(process.env.BATTLE_DURATION_SECONDS || 1800);
+const AI_BATTLE_RESULT_WAIT_MS = Math.max(500, Number(process.env.AI_BATTLE_RESULT_WAIT_MS || 2500));
 
 const addOnlineSocket = (userId, socketId) => {
   if (!userId) {
@@ -379,6 +403,75 @@ const getTotalTestCount = (question = {}) =>
   (Array.isArray(question.sampleTests) ? question.sampleTests.length : 0) +
   (Array.isArray(question.hiddenTests) ? question.hiddenTests.length : 0);
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const normalizeStoredAIBattleOutcome = (battle, xp = null) => {
+  const storedOutcome = battle?.aiOutcome || {};
+
+  return {
+    status: storedOutcome.status || storedOutcome.result || 'draw',
+    result: storedOutcome.result || storedOutcome.status || 'draw',
+    reason: storedOutcome.reason || 'Battle result already resolved.',
+    userResult: {
+      ...(storedOutcome.userResult || {}),
+      ...(xp !== null ? { xp } : {})
+    },
+    aiResult: storedOutcome.aiResult || {}
+  };
+};
+
+const waitForActiveAIExecution = async (battleId) => {
+  const activeExecution = activeAIBattleExecutions.get(battleId?.toString?.() || battleId);
+  if (!activeExecution) {
+    return false;
+  }
+
+  const completion = await Promise.race([
+    activeExecution.then(() => true).catch(() => false),
+    sleep(AI_BATTLE_RESULT_WAIT_MS).then(() => false)
+  ]);
+
+  return completion;
+};
+
+const ensureAIExecutionReady = async ({ battle, user, fallbackLanguage }) => {
+  const totalCases = getTotalTestCount(battle.question);
+  const currentStatus = battle.aiExecution?.status;
+
+  if (currentStatus === 'completed' || currentStatus === 'fallback') {
+    return battle.aiExecution;
+  }
+
+  await waitForActiveAIExecution(battle._id.toString());
+
+  const refreshedBattle = await Battle.findById(battle._id)
+    .select('question aiOpponent aiExecution aiOutcome createdAt')
+    .lean();
+
+  if (!refreshedBattle) {
+    return battle.aiExecution;
+  }
+
+  if (
+    refreshedBattle.aiExecution?.status === 'completed' ||
+    refreshedBattle.aiExecution?.status === 'fallback'
+  ) {
+    return refreshedBattle.aiExecution;
+  }
+
+  return persistFallbackAIExecution({
+    battleId: battle._id,
+    question: refreshedBattle.question,
+    opponent: refreshedBattle.aiOpponent,
+    user,
+    totalCases,
+    battleDurationSeconds: BATTLE_DURATION_SECONDS,
+    language: refreshedBattle.aiExecution?.language || fallbackLanguage || 'python',
+    attemptsUsed: refreshedBattle.aiExecution?.attemptsUsed || 0,
+    feedback: refreshedBattle.aiExecution?.lastFeedback || 'AI battle resolution forced fallback because live execution did not finish in time.'
+  });
+};
+
 io.on('connection', (socket) => {
   const userId = socket.handshake.query.userId;
 
@@ -395,6 +488,11 @@ io.on('connection', (socket) => {
           battleRooms.delete(battleId);
         }
       }
+    }
+
+    const pendingSetup = pendingAIBattleSetups.get(userId);
+    if (pendingSetup) {
+      pendingSetup.cancelled = true;
     }
 
     removeOnlineSocket(userId, socket.id);
@@ -429,6 +527,17 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on("cancelAIBattleSetup", ({ userId }) => {
+    if (!userId) {
+      return;
+    }
+
+    const pendingSetup = pendingAIBattleSetups.get(userId);
+    if (pendingSetup) {
+      pendingSetup.cancelled = true;
+    }
+  });
+
   socket.on("joinQueue", async ({ userId, mode, topic }) => {
     try {
       if (!userId || !mode || !topic) {
@@ -459,11 +568,17 @@ io.on('connection', (socket) => {
   });
 
   socket.on("startAIBattle", async ({ userId, mode, topic }) => {
+    const setupToken = `${socket.id}:${Date.now()}`;
+    if (userId) {
+      pendingAIBattleSetups.set(userId, { token: setupToken, cancelled: false });
+    }
+
     try {
       if (!userId || !mode || !topic) {
         socket.emit("matchmakingError", {
           message: "Missing AI battle details. Please choose a mode and topic again."
         });
+        pendingAIBattleSetups.delete(userId);
         return;
       }
 
@@ -472,6 +587,7 @@ io.on('connection', (socket) => {
         socket.emit("matchmakingError", {
           message: "Cannot find the user for AI battle."
         });
+        pendingAIBattleSetups.delete(userId);
         return;
       }
 
@@ -482,6 +598,13 @@ io.on('connection', (socket) => {
         topic,
         battleDurationSeconds: BATTLE_DURATION_SECONDS
       });
+
+      const pendingSetup = pendingAIBattleSetups.get(userId);
+      const setupWasCancelled = !pendingSetup || pendingSetup.token !== setupToken || pendingSetup.cancelled;
+      if (setupWasCancelled) {
+        await Battle.findByIdAndDelete(battle._id);
+        return;
+      }
 
       const battleId = battle._id.toString();
       const executionPromise = runLiveAIBattleExecution({
@@ -517,9 +640,15 @@ io.on('connection', (socket) => {
       });
     } catch (err) {
       console.error("Error in startAIBattle:", err);
+      pendingAIBattleSetups.delete(userId);
       socket.emit("matchmakingError", {
         message: err.message || "Unable to start AI battle right now."
       });
+    } finally {
+      const pendingSetup = pendingAIBattleSetups.get(userId);
+      if (pendingSetup?.token === setupToken) {
+        pendingAIBattleSetups.delete(userId);
+      }
     }
   });
 
@@ -651,7 +780,8 @@ io.on('connection', (socket) => {
     }
 
     try {
-      let aiBattle = await Battle.findById(battleDetails.battleId).select('player1 battleType mode question aiExecution');
+      let aiBattle = await Battle.findById(battleDetails.battleId)
+        .select('player1 battleType mode question aiExecution aiOutcome aiOpponent');
 
       if (aiBattle?.battleType === 'ai') {
         const user = await User.findById(userId).select('currWinStreak').lean();
@@ -659,11 +789,19 @@ io.on('connection', (socket) => {
           return;
         }
 
-        const activeExecution = activeAIBattleExecutions.get(battleDetails.battleId?.toString?.() || battleDetails.battleId);
-        if (activeExecution) {
-          await activeExecution;
-          aiBattle = await Battle.findById(battleDetails.battleId).select('player1 battleType mode question aiExecution');
+        if (aiBattle.aiOutcome?.resolvedAt) {
+          emitToUser(userId, 'battleResult', normalizeStoredAIBattleOutcome(aiBattle));
+          return;
         }
+
+        const aiExecution = await ensureAIExecutionReady({
+          battle: aiBattle,
+          user,
+          fallbackLanguage: battleDetails.language || 'python'
+        });
+
+        aiBattle = await Battle.findById(battleDetails.battleId)
+          .select('player1 battleType mode question aiExecution aiOutcome aiOpponent');
 
         const totalCases = getTotalTestCount(aiBattle.question);
         const passedCases = lost
@@ -678,11 +816,39 @@ io.on('connection', (socket) => {
 
         const outcome = resolveAIBattleOutcome({
           userResult,
-          aiExecution: aiBattle.aiExecution
+          aiExecution: aiExecution || aiBattle.aiExecution
         });
 
-        aiBattle.winner = outcome.status === 'won' ? userId : null;
-        await aiBattle.save();
+        const claimedBattle = await Battle.findOneAndUpdate(
+          {
+            _id: battleDetails.battleId,
+            battleType: 'ai',
+            'aiOutcome.resolvedAt': null
+          },
+          {
+            $set: {
+              winner: outcome.status === 'won' ? userId : null,
+              aiOutcome: {
+                status: outcome.status,
+                result: outcome.result,
+                reason: outcome.reason,
+                userResult: outcome.userResult,
+                aiResult: outcome.aiResult,
+                resolvedAt: new Date()
+              }
+            }
+          },
+          {
+            new: true
+          }
+        );
+
+        if (!claimedBattle) {
+          const resolvedBattle = await Battle.findById(battleDetails.battleId)
+            .select('aiOutcome');
+          emitToUser(userId, 'battleResult', normalizeStoredAIBattleOutcome(resolvedBattle));
+          return;
+        }
 
         const rewardedPlayer = await applyAIBattleRewards({
           player: {
@@ -694,8 +860,8 @@ io.on('connection', (socket) => {
             passedCases,
             totalCases
           },
-          question: aiBattle.question,
-          mode: aiBattle.mode
+          question: claimedBattle.question,
+          mode: claimedBattle.mode
         });
 
         emitToUser(userId, 'battleResult', {
@@ -709,7 +875,16 @@ io.on('connection', (socket) => {
       }
     } catch (err) {
       console.error("Error resolving AI battle:", err.message);
-      emitToUser(userId, 'battleResult', 'loss');
+      const resolvedBattle = await Battle.findById(battleDetails.battleId)
+        .select('battleType aiOutcome')
+        .lean()
+        .catch(() => null);
+
+      if (resolvedBattle?.battleType === 'ai' && resolvedBattle.aiOutcome?.resolvedAt) {
+        emitToUser(userId, 'battleResult', normalizeStoredAIBattleOutcome(resolvedBattle));
+      } else {
+        emitToUser(userId, 'battleResult', 'loss');
+      }
       return;
     }
 
@@ -878,4 +1053,10 @@ server.requestTimeout = Number(process.env.HTTP_REQUEST_TIMEOUT_MS || 70000);
 server.listen(PORT, () => {
   connectDB();
   console.log(`Server running on http://localhost:${PORT}`);
+  const redisStatus = getRedisStatus();
+  if (redisStatus.connected) {
+    console.log('[Redis] Startup status: connected.');
+  } else {
+    console.warn(`[Redis] Startup status: unavailable.${redisStatus.lastError ? ` Last error: ${redisStatus.lastError}` : ''}`);
+  }
 });

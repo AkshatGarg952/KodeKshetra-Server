@@ -148,6 +148,64 @@ const buildFallbackResult = ({
   lastUpdatedAt: new Date()
 });
 
+const getExecutionWriteFilter = (battleId) => ({
+  _id: battleId,
+  'aiOutcome.resolvedAt': null,
+  'aiExecution.status': { $ne: 'fallback' }
+});
+
+const isExecutionLocked = async (battleId) => {
+  const battle = await Battle.findById(battleId)
+    .select('aiExecution.status aiOutcome.resolvedAt')
+    .lean();
+
+  if (!battle) {
+    return true;
+  }
+
+  return Boolean(battle.aiOutcome?.resolvedAt) || battle.aiExecution?.status === 'fallback';
+};
+
+export async function persistFallbackAIExecution({
+  battleId,
+  question,
+  opponent,
+  user,
+  totalCases,
+  battleDurationSeconds,
+  language,
+  attemptsUsed = 0,
+  feedback = ''
+}) {
+  const finalResult = buildFallbackResult({
+    battleId: battleId.toString(),
+    question,
+    opponent,
+    user,
+    totalCases,
+    battleDurationSeconds,
+    language,
+    attemptsUsed,
+    feedback
+  });
+
+  await Battle.findByIdAndUpdate(battleId, {
+    $set: {
+      aiExecution: {
+        ...finalResult,
+        status: 'fallback',
+        attemptsUsed: finalResult.attemptsUsed ?? attemptsUsed,
+        maxAttempts: finalResult.maxAttempts ?? AI_BATTLE_MAX_ATTEMPTS,
+        totalCases,
+        language: finalResult.language || language,
+        lastUpdatedAt: new Date()
+      }
+    }
+  });
+
+  return finalResult;
+}
+
 export const buildInitialAIExecution = ({ language, totalCases }) => ({
   status: 'pending',
   strategy: null,
@@ -183,7 +241,7 @@ export default async function runLiveAIBattleExecution({
   let bestResult = null;
   let retryFeedback = '';
 
-  await Battle.findByIdAndUpdate(battleId, {
+  const markedRunning = await Battle.findOneAndUpdate(getExecutionWriteFilter(battleId), {
     $set: {
       'aiExecution.status': 'running',
       'aiExecution.failureReason': 'AI is solving in the background.',
@@ -191,11 +249,19 @@ export default async function runLiveAIBattleExecution({
     }
   });
 
+  if (!markedRunning) {
+    return null;
+  }
+
   while (
     attemptsUsed < AI_BATTLE_MAX_ATTEMPTS &&
     getRemainingBattleSeconds({ battleStartedAt, battleDurationSeconds }) > 0 &&
     !bestResult?.solved
   ) {
+    if (await isExecutionLocked(battleId)) {
+      return bestResult;
+    }
+
     attemptsUsed += 1;
     let evaluatedResult = null;
 
@@ -239,7 +305,7 @@ export default async function runLiveAIBattleExecution({
       };
     }
 
-    await Battle.findByIdAndUpdate(battleId, {
+    const persistedProgress = await Battle.findOneAndUpdate(getExecutionWriteFilter(battleId), {
       $set: {
         'aiExecution.status': bestResult?.solved ? 'completed' : 'running',
         'aiExecution.strategy': bestResult?.strategy || null,
@@ -260,6 +326,10 @@ export default async function runLiveAIBattleExecution({
       }
     });
 
+    if (!persistedProgress) {
+      return bestResult;
+    }
+
     if (bestResult?.solved) {
       break;
     }
@@ -273,8 +343,12 @@ export default async function runLiveAIBattleExecution({
     }
   }
 
-  const finalResult = bestResult || buildFallbackResult({
-    battleId: battleId.toString(),
+  if (await isExecutionLocked(battleId)) {
+    return bestResult;
+  }
+
+  const finalResult = bestResult || await persistFallbackAIExecution({
+    battleId,
     question,
     opponent,
     user,
@@ -285,7 +359,11 @@ export default async function runLiveAIBattleExecution({
     feedback: retryFeedback || 'No judged AI attempt completed successfully.'
   });
 
-  await Battle.findByIdAndUpdate(battleId, {
+  if (finalResult.status === 'fallback') {
+    return finalResult;
+  }
+
+  const persistedFinal = await Battle.findOneAndUpdate(getExecutionWriteFilter(battleId), {
     $set: {
       aiExecution: {
         ...finalResult,
@@ -298,6 +376,10 @@ export default async function runLiveAIBattleExecution({
       }
     }
   });
+
+  if (!persistedFinal) {
+    return bestResult;
+  }
 
   return finalResult;
 }

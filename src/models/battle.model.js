@@ -50,6 +50,34 @@ const BattleSchema = new Schema({
     lastFeedback: { type: String, default: null },
     lastUpdatedAt: { type: Date, default: null }
   },
+  aiOutcome: {
+    status: {
+      type: String,
+      enum: ['won', 'loss', 'draw'],
+      default: null
+    },
+    result: {
+      type: String,
+      enum: ['won', 'loss', 'draw'],
+      default: null
+    },
+    reason: { type: String, default: null },
+    userResult: {
+      solved: { type: Boolean, default: false },
+      passedCases: { type: Number, default: 0 },
+      finishTimeSeconds: { type: Number, default: 0 }
+    },
+    aiResult: {
+      status: { type: String, default: null },
+      solved: { type: Boolean, default: false },
+      passedCases: { type: Number, default: 0 },
+      finishTimeSeconds: { type: Number, default: 0 },
+      strategy: { type: String, default: null },
+      attemptsUsed: { type: Number, default: 0 },
+      maxAttempts: { type: Number, default: 0 }
+    },
+    resolvedAt: { type: Date, default: null }
+  },
   createdAt: { type: Date, default: Date.now }
 });
 
