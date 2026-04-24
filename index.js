@@ -324,6 +324,7 @@ const activeAIBattleExecutions = new Map();
 const pendingAIBattleSetups = new Map();
 const BATTLE_DURATION_SECONDS = Number(process.env.BATTLE_DURATION_SECONDS || 1800);
 const AI_BATTLE_RESULT_WAIT_MS = Math.max(500, Number(process.env.AI_BATTLE_RESULT_WAIT_MS || 2500));
+const SERVER_INSTANCE_ID = process.env.RENDER_INSTANCE_ID || process.env.HOSTNAME || `pid-${process.pid}`;
 
 const addOnlineSocket = (userId, socketId) => {
   if (!userId) {
@@ -540,6 +541,11 @@ io.on('connection', (socket) => {
 
   socket.on("joinQueue", async ({ userId, mode, topic }) => {
     try {
+      const redisStatusAtJoin = getRedisStatus();
+      console.log(
+        `[Matchmaking] joinQueue requested instance=${SERVER_INSTANCE_ID} userId=${userId} mode=${mode} topic=${topic} redisConnected=${redisStatusAtJoin.connected} hasClient=${redisStatusAtJoin.hasClient} lastError=${redisStatusAtJoin.lastError || 'none'}`
+      );
+
       if (!userId || !mode || !topic) {
         socket.emit("matchmakingError", {
           message: "Missing matchmaking details. Please choose a mode and topic again."
@@ -558,9 +564,16 @@ io.on('connection', (socket) => {
       const rating = user.rating?.[mode] || 1200;
 
       await addUserToQueue({ userId, mode, topic, rating });
+      console.log(
+        `[Matchmaking] user queued instance=${SERVER_INSTANCE_ID} userId=${userId} mode=${mode} topic=${topic} rating=${rating}`
+      );
       await tryToMatch(mode, topic, io, onlineUsers);
     } catch (err) {
       console.error("Error in joinQueue:", err);
+      const redisStatusAtError = getRedisStatus();
+      console.error(
+        `[Matchmaking] joinQueue failed instance=${SERVER_INSTANCE_ID} userId=${userId} mode=${mode} topic=${topic} redisConnected=${redisStatusAtError.connected} hasClient=${redisStatusAtError.hasClient} lastError=${redisStatusAtError.lastError || 'none'}`
+      );
       socket.emit("matchmakingError", {
         message: err.message || "Unable to join matchmaking right now."
       });
