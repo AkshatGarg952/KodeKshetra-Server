@@ -140,6 +140,7 @@ async function tryToMatch(mode, topic, io, onlineUsers) {
       const newBattle = await Battle.create({
         player1: user1.userId,
         player2: user2.userId,
+        battleType: 'matchmaking',
         mode,
         topic,
         question,
@@ -154,7 +155,8 @@ async function tryToMatch(mode, topic, io, onlineUsers) {
         battleStartedAt: battleStartedAt.toISOString(),
         battleEndsAt,
         battleDurationSeconds: BATTLE_DURATION_SECONDS,
-        roomId: null
+        roomId: null,
+        battleType: 'matchmaking'
       };
 
       emitToUserSockets(io, onlineUsers.get(user1.userId), 'battleStart', payload);

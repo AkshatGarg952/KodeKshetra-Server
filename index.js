@@ -24,6 +24,10 @@ import setStreaks from "./src/helper/updation/setStreaks.js";
 import leetcodeQuestion from "./src/models/leetcode_questions.model.js";
 import CFproblems from "./src/models/codeforces_questions.model.js";
 import { refreshLeaderboardEntries } from './src/helper/leaderboard/scoreCalculation.js';
+import createAIBattle from './src/helper/ai/createAIBattle.js';
+import runLiveAIBattleExecution from './src/helper/ai/liveAIBattleExecution.js';
+import resolveAIBattleOutcome from './src/helper/ai/resolveAIBattleOutcome.js';
+import applyAIBattleRewards from './src/helper/ai/applyAIBattleRewards.js';
 
 dotenv.config();
 
@@ -294,6 +298,7 @@ const battleRooms = new Map();
 const battleSubmissions = new Map();
 const battles = new Map();
 const processingBattles = new Set();
+const activeAIBattleExecutions = new Map();
 const BATTLE_DURATION_SECONDS = Number(process.env.BATTLE_DURATION_SECONDS || 1800);
 
 const addOnlineSocket = (userId, socketId) => {
@@ -360,6 +365,14 @@ const sanitizeQuestionForClient = (question, mode) => {
 
   return normalizedQuestion;
 };
+
+const sanitizeOpponentForClient = (opponent = {}) => ({
+  type: 'bot',
+  name: opponent.displayName || 'KodeBot',
+  rating: opponent.visibleRating || 1200,
+  persona: opponent.persona || 'generalist',
+  difficulty: opponent.difficulty || 'balanced'
+});
 
 const getTotalTestCount = (question = {}) =>
   (Array.isArray(question.examples) ? question.examples.length : 0) +
@@ -441,6 +454,71 @@ io.on('connection', (socket) => {
       console.error("Error in joinQueue:", err);
       socket.emit("matchmakingError", {
         message: err.message || "Unable to join matchmaking right now."
+      });
+    }
+  });
+
+  socket.on("startAIBattle", async ({ userId, mode, topic }) => {
+    try {
+      if (!userId || !mode || !topic) {
+        socket.emit("matchmakingError", {
+          message: "Missing AI battle details. Please choose a mode and topic again."
+        });
+        return;
+      }
+
+      const user = await User.findById(userId).select('_id rating solvedQuestions currWinStreak').lean();
+      if (!user) {
+        socket.emit("matchmakingError", {
+          message: "Cannot find the user for AI battle."
+        });
+        return;
+      }
+
+      console.log(`[AI Battle] Starting AI battle for user=${userId}, mode=${mode}, topic=${topic}`);
+      const { battle, question, battleStartedAt, battleEndsAt, opponent, defaultLanguage } = await createAIBattle({
+        user,
+        mode,
+        topic,
+        battleDurationSeconds: BATTLE_DURATION_SECONDS
+      });
+
+      const battleId = battle._id.toString();
+      const executionPromise = runLiveAIBattleExecution({
+        battleId,
+        battleStartedAt,
+        battleDurationSeconds: BATTLE_DURATION_SECONDS,
+        question,
+        topic,
+        mode,
+        language: defaultLanguage,
+        opponent,
+        user
+      }).catch((error) => {
+        console.error(`[AI Battle] Background execution failed for battleId=${battleId}:`, error.message);
+      }).finally(() => {
+        activeAIBattleExecutions.delete(battleId);
+      });
+
+      activeAIBattleExecutions.set(battleId, executionPromise);
+
+      console.log(`[AI Battle] Battle ready battleId=${battle._id.toString()} opponent=${opponent.displayName}`);
+      emitToUser(userId, "battleStart", {
+        question: sanitizeQuestionForClient(question, mode),
+        battleId: battle._id,
+        mode,
+        topic,
+        battleType: 'ai',
+        battleStartedAt: battleStartedAt.toISOString(),
+        battleEndsAt,
+        battleDurationSeconds: BATTLE_DURATION_SECONDS,
+        roomId: null,
+        opponent: sanitizeOpponentForClient(opponent)
+      });
+    } catch (err) {
+      console.error("Error in startAIBattle:", err);
+      socket.emit("matchmakingError", {
+        message: err.message || "Unable to start AI battle right now."
       });
     }
   });
@@ -541,6 +619,7 @@ io.on('connection', (socket) => {
       const newBattle = await Battle.create({
         player1: user1._id,
         player2: user2._id,
+        battleType: 'private',
         question,
         mode: roomBattle.mode,
         topic: roomBattle.topic,
@@ -552,6 +631,7 @@ io.on('connection', (socket) => {
         battleId: newBattle._id,
         mode: roomBattle.mode,
         topic: roomBattle.topic,
+        battleType: 'private',
         battleStartedAt: battleStartedAt.toISOString(),
         battleEndsAt,
         battleDurationSeconds: BATTLE_DURATION_SECONDS,
@@ -567,6 +647,69 @@ io.on('connection', (socket) => {
 
   socket.on("battleEnded", async ({ battleDetails, userId, code, roomId, lost }) => {
     if (!battleDetails?.battleId || !userId) {
+      return;
+    }
+
+    try {
+      let aiBattle = await Battle.findById(battleDetails.battleId).select('player1 battleType mode question aiExecution');
+
+      if (aiBattle?.battleType === 'ai') {
+        const user = await User.findById(userId).select('currWinStreak').lean();
+        if (!user || aiBattle.player1?.toString() !== userId) {
+          return;
+        }
+
+        const activeExecution = activeAIBattleExecutions.get(battleDetails.battleId?.toString?.() || battleDetails.battleId);
+        if (activeExecution) {
+          await activeExecution;
+          aiBattle = await Battle.findById(battleDetails.battleId).select('player1 battleType mode question aiExecution');
+        }
+
+        const totalCases = getTotalTestCount(aiBattle.question);
+        const passedCases = lost
+          ? 0
+          : await decideWinner(code || '', battleDetails.language || 'python', aiBattle.question);
+
+        const userResult = {
+          solved: passedCases >= totalCases && totalCases > 0,
+          passedCases,
+          finishTimeSeconds: lost ? 0 : (battleDetails.timeRemaining ?? 0)
+        };
+
+        const outcome = resolveAIBattleOutcome({
+          userResult,
+          aiExecution: aiBattle.aiExecution
+        });
+
+        aiBattle.winner = outcome.status === 'won' ? userId : null;
+        await aiBattle.save();
+
+        const rewardedPlayer = await applyAIBattleRewards({
+          player: {
+            id: userId,
+            status: outcome.status,
+            time: battleDetails.timeRemaining ?? 0,
+            currWinStreak: user.currWinStreak,
+            language: battleDetails.language || null,
+            passedCases,
+            totalCases
+          },
+          question: aiBattle.question,
+          mode: aiBattle.mode
+        });
+
+        emitToUser(userId, 'battleResult', {
+          ...outcome,
+          userResult: {
+            ...outcome.userResult,
+            xp: rewardedPlayer.xp
+          }
+        });
+        return;
+      }
+    } catch (err) {
+      console.error("Error resolving AI battle:", err.message);
+      emitToUser(userId, 'battleResult', 'loss');
       return;
     }
 
