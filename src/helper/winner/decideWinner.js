@@ -13,7 +13,8 @@ const codeRunnerClient = axios.create({
     maxSockets: Number(process.env.CODE_RUNNER_MAX_SOCKETS || 512)
   }),
   headers: {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    ...(process.env.INTERNAL_SERVICE_TOKEN ? { 'x-internal-token': process.env.INTERNAL_SERVICE_TOKEN } : {})
   }
 });
 

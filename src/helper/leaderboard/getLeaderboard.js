@@ -1,8 +1,9 @@
 import redisClient, { isRedisAvailable } from "../../redis/redisClient.js";
 import User from "../../models/user.model.js";
+import UserDailyStats from "../../models/user_daily_stats.model.js";
 import mongoose from "mongoose";
 import dayjs from "dayjs";
-import { calculateScoreForUser, updateLeaderboard } from "./scoreCalculation.js";
+import { calculateScoreForStats, calculateScoreForUser, updateLeaderboard, getUserScoresByWindow } from "./scoreCalculation.js";
 
 const parseDaysFromKey = (key) => {
   const [, rawDays] = String(key || "").split(":");
@@ -12,23 +13,98 @@ const parseDaysFromKey = (key) => {
 
 const getPaginatedLeaderboardFromMongo = async ({ page, limit, days }) => {
   const start = (page - 1) * limit;
-  const end = start + limit;
   const timeWindowStart = dayjs().subtract(days, "day").toDate();
 
+  const aggregatedStats = await UserDailyStats.aggregate([
+    {
+      $match: {
+        date: { $gte: timeWindowStart }
+      }
+    },
+    {
+      $group: {
+        _id: "$userId",
+        xp: { $sum: "$xp" },
+        totalWins: { $sum: "$battlesWon" },
+        matchesPlayed: { $sum: "$battlesPlayed" }
+      }
+    },
+    {
+      $addFields: {
+        points: {
+          $add: [
+            { $multiply: ["$totalWins", 50] },
+            { $multiply: ["$matchesPlayed", 5] },
+            "$xp",
+            {
+              $floor: {
+                $multiply: [
+                  {
+                    $divide: [
+                      "$totalWins",
+                      { $cond: [{ $gt: ["$matchesPlayed", 0] }, "$matchesPlayed", 1] }
+                    ]
+                  },
+                  100
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    { $sort: { points: -1, _id: 1 } },
+    { $skip: start },
+    { $limit: limit + 1 }
+  ]);
+
+  if (aggregatedStats.length > 0) {
+    const hasNextPage = aggregatedStats.length > limit;
+    const pageRows = hasNextPage ? aggregatedStats.slice(0, limit) : aggregatedStats;
+    const userIds = pageRows.map((row) => row._id);
+    const users = await User.find({ _id: { $in: userIds } })
+      .select("username profilePicture currStreak")
+      .lean();
+
+    const userMap = new Map(users.map((user) => [user._id.toString(), user]));
+    const result = pageRows
+      .map((row, idx) => {
+        const user = userMap.get(row._id.toString());
+        if (!user) {
+          return null;
+        }
+
+        return {
+          rank: start + idx + 1,
+          username: user.username,
+          profilePicture: user.profilePicture,
+          currentStreak: user.currStreak || 0,
+          points: row.points
+        };
+      })
+      .filter(Boolean);
+
+    return { result, hasNextPage };
+  }
+
+  const end = start + limit;
   const users = await User.find()
-    .select("username profilePicture currStreak XP totalW totalB")
+    .select("username profilePicture currStreak")
     .lean();
 
   if (!users || users.length === 0) {
     return { result: [], hasNextPage: false };
   }
 
+  const userIds = users.map((u) => u._id);
+  const scoreMap = await getUserScoresByWindow({ userIds, days });
+
   const leaderboard = users
     .map((user) => ({
       username: user.username,
       profilePicture: user.profilePicture,
       currentStreak: user.currStreak || 0,
-      points: calculateScoreForUser(user, timeWindowStart),
+      points: scoreMap.get(user._id.toString()) || 0,
     }))
     .sort((a, b) => {
       if (b.points !== a.points) {

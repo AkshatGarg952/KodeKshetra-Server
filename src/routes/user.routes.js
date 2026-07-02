@@ -17,7 +17,7 @@ userRouter.put("/update/:id", jwt, upload.single('ProfilePicture'), (req, res) =
    userController.update(req, res);
 })
 
-userRouter.get("/getUserDetails/:userId", (req, res) => {
+userRouter.get("/getUserDetails/:userId", jwt, (req, res) => {
    userController.getUserDetails(req, res);
 })
 

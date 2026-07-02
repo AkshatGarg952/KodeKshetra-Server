@@ -1,5 +1,7 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+import Battle from '../models/battle.model.js';
+import UserDailyStats from '../models/user_daily_stats.model.js';
 
 dotenv.config();
 const connectDB = async () => {
@@ -12,9 +14,14 @@ const connectDB = async () => {
       maxIdleTimeMS: Number(process.env.MONGO_MAX_IDLE_TIME_MS || 60000),
       autoIndex: process.env.NODE_ENV !== 'production'
     });
+    await Promise.all([
+      Battle.init(),
+      UserDailyStats.init()
+    ]);
     console.log('MongoDB connected');
   } catch (error) {
     console.error('Database connection error:', error.message);
+    throw error;
   }
 };
 export default connectDB;

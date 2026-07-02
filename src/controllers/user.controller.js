@@ -6,6 +6,8 @@ import jwt from 'jsonwebtoken';
 import leetcodeData from '../helper/fetchProfile/fetchLeetcode.js';
 import codeforcesData from '../helper/fetchProfile/fetchCodeforces.js';
 import badgesData from '../models/badge.model.js';
+import UserDailyStats from '../models/user_daily_stats.model.js';
+import { toDateKey } from '../helper/stats/dateBuckets.js';
 dotenv.config();
 
 const sanitizeUser = (user) => ({
@@ -35,6 +37,7 @@ export default class UserC {
       const newUserData = {
         email: email,
         username: username,
+        rating: {},
       }
 
       if (!password) {
@@ -46,16 +49,24 @@ export default class UserC {
         newUserData.profilePicture = req.file.path;
       }
 
-      const newUser = await User.create(newUserData);
+      if (leetcodeId) {
+        newUserData.rating.dsa = 1500;
+      }
+      if (codeforcesId) {
+        newUserData.rating.cp = 1200;
+      }
+
+      let newUser = await User.create(newUserData);
       if (leetcodeId) {
         newUser.sections.dsa = true;
-        newUser.leetcodeId = req.body.leetcodeId;
-        newUser.rating.dsa = 1500;
+        newUser.leetcodeId = leetcodeId;
       }
       if (codeforcesId) {
         try {
-          await codeforcesData(newUser._id, req.body.codeforcesId);
-          newUser.codeforcesId = req.body.codeforcesId;
+          await codeforcesData(newUser._id, codeforcesId);
+          // Reload updated user document to avoid overwriting codeforces updates
+          newUser = await User.findById(newUser._id);
+          newUser.codeforcesId = codeforcesId;
           newUser.sections.cp = true;
         }
         catch (err) {
@@ -145,6 +156,10 @@ export default class UserC {
   async getUserDetails(req, res) {
     const userId = req.params.userId;
 
+    if (!req.user || req.user.id !== userId) {
+      return res.status(403).json({ message: "Forbidden: You can only view your own profile summary." });
+    }
+
     const startDate = dayjs().subtract(89, "day").startOf("day").toDate();
 
     try {
@@ -153,18 +168,22 @@ export default class UserC {
         return res.status(404).json({ message: "User does not exist!" });
       }
 
+      const dailyStats = await UserDailyStats.find({
+        userId,
+        date: { $gte: startDate }
+      })
+        .select('dateKey battlesPlayed')
+        .lean();
+
       const counts = {};
-      user.totalB.forEach(battle => {
-        if (battle.date >= startDate) {
-          const day = dayjs(battle.date).format("YYYY-MM-DD");
-          counts[day] = (counts[day] || 0) + battle.battlesPlayed;
-        }
+      dailyStats.forEach((entry) => {
+        counts[entry.dateKey] = (counts[entry.dateKey] || 0) + (entry.battlesPlayed || 0);
       });
 
       const heatmap = [];
       for (let i = 0; i < 90; i++) {
         const currentDate = dayjs(startDate).add(i, "day");
-        const formatted = currentDate.format("YYYY-MM-DD");
+        const formatted = toDateKey(currentDate.toDate());
 
         heatmap.push({
           date: formatted,
@@ -191,8 +210,23 @@ export default class UserC {
         }
       }
 
-      const totalBattles = user.totalB.reduce((acc, b) => acc + (b.battlesPlayed || 0), 0);
-      const totalWins = user.totalW.reduce((acc, w) => acc + (w.battlesWon || 0), 0);
+      const totals = await UserDailyStats.aggregate([
+        {
+          $match: {
+            userId: user._id
+          }
+        },
+        {
+          $group: {
+            _id: '$userId',
+            totalBattles: { $sum: '$battlesPlayed' },
+            totalWins: { $sum: '$battlesWon' }
+          }
+        }
+      ]);
+
+      const totalBattles = totals[0]?.totalBattles || 0;
+      const totalWins = totals[0]?.totalWins || 0;
 
 
       const ans = {

@@ -18,6 +18,9 @@ export default async function validateImportedSolution(problem, solution, logger
       },
       {
         timeout: 60000,
+        headers: process.env.INTERNAL_SERVICE_TOKEN
+          ? { "x-internal-token": process.env.INTERNAL_SERVICE_TOKEN }
+          : undefined,
       }
     );
 

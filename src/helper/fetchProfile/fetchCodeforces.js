@@ -9,6 +9,8 @@ async function codeforcesData(userId, username) {
   const user = await User.findById(userId);
   if (!user) throw new Error('User not found');
 
+  user.rating = user.rating || {};
+
   let response = await axios.get(`https://codeforces.com/api/user.info?handles=${username}`);
   if (response.data.status === 'OK') {
     const data = response.data.result[0];

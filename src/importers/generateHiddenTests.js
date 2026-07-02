@@ -29,7 +29,12 @@ export default async function generateHiddenTests(problem, solution, platform, l
     const hiddenInputsResponse = await axios.post(
       `${hiddenForcesUrl}${endpoint}`,
       { problem },
-      { timeout: 300000 }
+      {
+        timeout: 300000,
+        headers: process.env.INTERNAL_SERVICE_TOKEN
+          ? { "x-internal-token": process.env.INTERNAL_SERVICE_TOKEN }
+          : undefined,
+      }
     );
 
     hiddenInputs = (hiddenInputsResponse.data?.hiddenTestCases || [])
@@ -75,8 +80,13 @@ export default async function generateHiddenTests(problem, solution, platform, l
           ...problem,
           testCases: hiddenInputs,
         },
-      },
-      { timeout: 120000 }
+        },
+      {
+        timeout: 120000,
+        headers: process.env.INTERNAL_SERVICE_TOKEN
+          ? { "x-internal-token": process.env.INTERNAL_SERVICE_TOKEN }
+          : undefined,
+      }
     );
 
     const outputs = outputsResponse.data?.outputs || [];
