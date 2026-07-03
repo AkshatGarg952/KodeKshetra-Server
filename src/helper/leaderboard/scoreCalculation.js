@@ -135,10 +135,12 @@ export async function updateLeaderboard({ key, days }) {
 
       const scoreMap = await getUserScoresByWindow({ userIds: batch, days });
       batch.forEach((userId) => {
-        pipeline.zAdd(key, {
-          score: scoreMap.get(userId) || 0,
-          value: userId
-        });
+        if (scoreMap.has(userId)) {
+          pipeline.zAdd(key, {
+            score: scoreMap.get(userId) || 0,
+            value: userId
+          });
+        }
       });
       batch.length = 0;
     };

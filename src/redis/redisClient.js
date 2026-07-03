@@ -40,12 +40,9 @@ const initializeRedis = async () => {
       socket: {
         connectTimeout: 5000,
         reconnectStrategy: (retries) => {
-          if (retries > 3) {
-            warnRedis("Connection failed after 3 retries. Running without Redis.");
-            return false;
-          }
-          warnRedis(`Reconnect attempt ${retries} scheduled...`);
-          return Math.min(retries * 100, 3000);
+          const delay = Math.min(retries * 100, 5000);
+          warnRedis(`Reconnect attempt ${retries} scheduled in ${delay}ms...`);
+          return delay;
         }
       }
     });

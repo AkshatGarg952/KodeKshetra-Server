@@ -7,7 +7,7 @@ import leetcodeData from '../helper/fetchProfile/fetchLeetcode.js';
 import codeforcesData from '../helper/fetchProfile/fetchCodeforces.js';
 import badgesData from '../models/badge.model.js';
 import UserDailyStats from '../models/user_daily_stats.model.js';
-import { toDateKey } from '../helper/stats/dateBuckets.js';
+import { toDateKey, getCurrentDateBucket, shiftDateKey } from '../helper/stats/dateBuckets.js';
 dotenv.config();
 
 const sanitizeUser = (user) => ({
@@ -166,6 +166,21 @@ export default class UserC {
       const user = await User.findById(userId);
       if (!user) {
         return res.status(404).json({ message: "User does not exist!" });
+      }
+
+      // Check if streak has expired (lazy decay evaluation)
+      const { dateKey: todayKey } = getCurrentDateBucket();
+      const yesterdayKey = shiftDateKey(todayKey, -1);
+
+      const playedTodayOrYesterday = await UserDailyStats.exists({
+        userId: user._id,
+        dateKey: { $in: [todayKey, yesterdayKey] },
+        battlesPlayed: { $gt: 0 }
+      });
+
+      if (!playedTodayOrYesterday && user.currStreak > 0) {
+        user.currStreak = 0;
+        await User.updateOne({ _id: user._id }, { $set: { currStreak: 0 } });
       }
 
       const dailyStats = await UserDailyStats.find({

@@ -210,55 +210,48 @@ export default function registerPrivateBattleHandlers(socket, {
         return;
       }
 
+      const existingBattle = await Battle.findOne({ roomId, battleType: "private" }).sort({ createdAt: -1 }).lean();
+      if (existingBattle) {
+        if (existingBattle.resolvedAt) {
+          userIds.forEach((participantId) => {
+            emitResolvedBattleResult(participantId, existingBattle);
+          });
+          return;
+        }
+
+        const existingPayload = buildBattleStartPayload({
+          question: sanitizeQuestionForClient(existingBattle.question, roomBattle.mode),
+          battleId: existingBattle._id,
+          mode: existingBattle.mode,
+          topic: existingBattle.topic,
+          battleType: existingBattle.battleType,
+          battleStartedAt: existingBattle.battleStartedAt?.toISOString?.() || null,
+          battleEndsAt: existingBattle.battleEndsAt ?? null,
+          battleDurationSeconds: BATTLE_DURATION_SECONDS,
+          roomId,
+        });
+
+        userIds.forEach((participantId) => {
+          emitToUser(participantId, "battleStart", existingPayload);
+        });
+        return;
+      }
+
       const question = await getQuestionForBattle(roomBattle, user1, user2);
       const battleStartedAt = new Date();
       const battleEndsAt = battleStartedAt.getTime() + (BATTLE_DURATION_SECONDS * 1000);
-      let newBattle;
-      try {
-        newBattle = await Battle.create({
-          player1: user1._id,
-          player2: user2._id,
-          roomId,
-          battleType: "private",
-          question,
-          mode: roomBattle.mode,
-          topic: roomBattle.topic,
-          createdAt: battleStartedAt,
-          battleStartedAt,
-          battleEndsAt,
-        });
-      } catch (error) {
-        if (error?.code === 11000) {
-          const existingBattle = await Battle.findOne({ roomId, battleType: "private" }).sort({ createdAt: -1 }).lean();
-          if (existingBattle) {
-            if (existingBattle.resolvedAt) {
-              userIds.forEach((participantId) => {
-                emitResolvedBattleResult(participantId, existingBattle);
-              });
-              return;
-            }
-
-            const existingPayload = buildBattleStartPayload({
-              question: sanitizeQuestionForClient(existingBattle.question, roomBattle.mode),
-              battleId: existingBattle._id,
-              mode: existingBattle.mode,
-              topic: existingBattle.topic,
-              battleType: existingBattle.battleType,
-              battleStartedAt: existingBattle.battleStartedAt?.toISOString?.() || null,
-              battleEndsAt: existingBattle.battleEndsAt ?? null,
-              battleDurationSeconds: BATTLE_DURATION_SECONDS,
-              roomId,
-            });
-
-            userIds.forEach((participantId) => {
-              emitToUser(participantId, "battleStart", existingPayload);
-            });
-            return;
-          }
-        }
-
-        throw error;
-      }
+      const newBattle = await Battle.create({
+        player1: user1._id,
+        player2: user2._id,
+        roomId,
+        battleType: "private",
+        question,
+        mode: roomBattle.mode,
+        topic: roomBattle.topic,
+        createdAt: battleStartedAt,
+        battleStartedAt,
+        battleEndsAt,
+      });
 
       const startedRoomConfig = {
         ...roomBattle,
