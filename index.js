@@ -2,17 +2,23 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import http from "http";
-import https from "https";
-import axios from "axios";
-import axiosRetry from "axios-retry";
 import { Server } from "socket.io";
+import { corsOptions, isOriginAllowed } from "./src/config/cors.js";
+import { authLimiter, executionLimiter, generalLimiter } from "./src/middlewares/rateLimiters.js";
+import codeRunnerClient from "./src/services/codeRunnerClient.js";
+
+// Database and Routes
 import connectDB from "./src/database/mongoose.js";
 import adminRouter from "./src/routes/admin.routes.js";
 import userRouter from "./src/routes/user.routes.js";
+
+// Models
 import User from "./src/models/user.model.js";
 import Battle from "./src/models/battle.model.js";
 import CFproblems from "./src/models/codeforces_questions.model.js";
 import leetcodeQuestion from "./src/models/leetcode_questions.model.js";
+
+// Helpers and Services
 import calculateXP from "./src/helper/XP/XPCalculator.js";
 import getPaginatedLeaderboardFromRedis from "./src/helper/leaderboard/getLeaderboard.js";
 import { refreshLeaderboardEntries } from "./src/helper/leaderboard/scoreCalculation.js";
@@ -22,6 +28,8 @@ import { decideWinner } from "./src/helper/winner/decideWinner.js";
 import registerExecutionRoutes from "./src/http/registerExecutionRoutes.js";
 import registerLeaderboardRoute from "./src/http/registerLeaderboardRoute.js";
 import jwtAuth from "./src/middlewares/jwt.middleware.js";
+
+// Redis and Matchmaking
 import cancelMatchmaking from "./src/redis/cancelMatchmaking.js";
 import {
   claimBattleProcessing,
@@ -36,6 +44,8 @@ import addUserToQueue from "./src/redis/matchmakingController.js";
 import tryToMatch from "./src/redis/matchmaker.js";
 import { getRedisClient, getRedisHealth, getRedisStatus, isRedisAvailable } from "./src/redis/redisClient.js";
 import { createProblemResolver } from "./src/services/problemResolver.js";
+
+// Socket utilities and handlers
 import { buildBattleStartPayload, getTotalTestCount, sanitizeQuestionForClient } from "./src/socket/battleUtils.js";
 import registerMatchmakingHandlers from "./src/socket/registerMatchmakingHandlers.js";
 import registerPrivateBattleHandlers from "./src/socket/registerPrivateBattleHandlers.js";
@@ -44,6 +54,7 @@ import { createUserEventBus } from "./src/socket/userEventBus.js";
 
 dotenv.config();
 
+// Ensure all essential environment variables are set
 const REQUIRED_ENV_VARS = ["MONGO_URI", "JWT_SECRET", "CODE_RUNNER_URL"];
 const missingEnvVars = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
 if (missingEnvVars.length > 0) {
@@ -55,60 +66,15 @@ app.set("trust proxy", 1);
 app.use(express.urlencoded({ extended: true, limit: "200kb" }));
 app.use(express.json({ limit: "200kb" }));
 
-const DEFAULT_ALLOWED_ORIGINS = [
-  "https://kode-kshetra-client.vercel.app",
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-];
-
-const configuredOrigins = (process.env.CORS_ORIGINS || "")
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-
-const allowedOrigins = Array.from(new Set([...DEFAULT_ALLOWED_ORIGINS, ...configuredOrigins]));
-
-function isOriginAllowed(origin) {
-  if (!origin) {
-    return true;
-  }
-
-  if (allowedOrigins.includes(origin)) {
-    return true;
-  }
-
-  try {
-    const parsedOrigin = new URL(origin);
-    const { protocol, hostname } = parsedOrigin;
-
-    if ((hostname === "localhost" || hostname === "127.0.0.1") && (protocol === "http:" || protocol === "https:")) {
-      return true;
-    }
-
-    if (protocol === "https:" && hostname.endsWith(".vercel.app")) {
-      return true;
-    }
-  } catch {
-    return false;
-  }
-
-  return false;
-}
-
-const corsOptions = {
-  origin: (origin, callback) => {
-    if (isOriginAllowed(origin)) {
-      callback(null, true);
-      return;
-    }
-
-    callback(new Error(`Origin not allowed by CORS: ${origin}`));
-  },
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true,
-};
-
+// Configure CORS using the modular options
 app.use(cors(corsOptions));
+
+// Apply Rate limiters
+app.use("/api/users/login", authLimiter);
+app.use("/api/users/register", authLimiter);
+app.use("/run", executionLimiter);
+app.use("/submit", executionLimiter);
+app.use(generalLimiter);
 
 app.get("/", (req, res) => {
   res.status(200).send("Welcome to KodeKshetra Server");
@@ -124,6 +90,7 @@ const {
   maxSize: Number(process.env.PROBLEM_CACHE_MAX_SIZE || 1000),
 });
 
+// Health Endpoints
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     status: "ok",
@@ -154,38 +121,13 @@ app.get("/api/redis-health", async (req, res) => {
   }
 });
 
+// Base HTTP routes
 app.use("/api/users", userRouter);
 app.use("/api/admin", adminRouter);
 
 registerLeaderboardRoute(app, { getPaginatedLeaderboardFromRedis });
 
-const codeRunnerHttpAgent = new http.Agent({
-  keepAlive: true,
-  maxSockets: Number(process.env.CODE_RUNNER_MAX_SOCKETS || 512),
-});
-
-const codeRunnerHttpsAgent = new https.Agent({
-  keepAlive: true,
-  maxSockets: Number(process.env.CODE_RUNNER_MAX_SOCKETS || 512),
-});
-
-const codeRunnerClient = axios.create({
-  timeout: Number(process.env.CODE_RUNNER_TIMEOUT_MS || 35000),
-  httpAgent: codeRunnerHttpAgent,
-  httpsAgent: codeRunnerHttpsAgent,
-  headers: {
-    "Content-Type": "application/json",
-    ...(process.env.INTERNAL_SERVICE_TOKEN ? { "x-internal-token": process.env.INTERNAL_SERVICE_TOKEN } : {}),
-  },
-});
-
-axiosRetry(codeRunnerClient, {
-  retries: 3,
-  retryDelay: axiosRetry.exponentialDelay,
-  retryCondition: (error) =>
-    axiosRetry.isNetworkOrIdempotentRequestError(error) || error.code === "ECONNABORTED",
-});
-
+// Execute/submit runner routes
 registerExecutionRoutes(app, {
   codeRunnerClient,
   codeRunnerUrl: process.env.CODE_RUNNER_URL,
@@ -194,14 +136,21 @@ registerExecutionRoutes(app, {
 });
 
 const server = http.createServer(app);
+
+// Socket.io Server Setup
 const io = new Server(server, {
+  maxHttpBufferSize: Number(process.env.SOCKETIO_MAX_HTTP_BUFFER_SIZE || 1e6),
+  pingTimeout: Number(process.env.SOCKETIO_PING_TIMEOUT_MS || 20000),
+  pingInterval: Number(process.env.SOCKETIO_PING_INTERVAL_MS || 25000),
+  perMessageDeflate: {
+    threshold: 1024,
+  },
   cors: {
     origin: (origin, callback) => {
       if (isOriginAllowed(origin)) {
         callback(null, true);
         return;
       }
-
       callback(new Error(`Origin not allowed by Socket.IO CORS: ${origin}`));
     },
     methods: ["GET", "POST"],
@@ -329,4 +278,14 @@ async function bootstrap() {
 void bootstrap().catch((error) => {
   console.error("Failed to start KodeKshetra server:", error.message);
   process.exit(1);
+});
+
+// Global Express error handler — registered after all routes
+app.use((err, req, res, next) => {
+  const status = err.status || err.statusCode || 500;
+  const message = err.message || "Internal Server Error";
+  console.error(`[Express] Unhandled error: ${req.method} ${req.path} → ${status} ${message}`);
+  if (!res.headersSent) {
+    res.status(status).json({ error: message });
+  }
 });

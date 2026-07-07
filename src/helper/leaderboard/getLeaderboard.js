@@ -3,7 +3,7 @@ import User from "../../models/user.model.js";
 import UserDailyStats from "../../models/user_daily_stats.model.js";
 import mongoose from "mongoose";
 import dayjs from "dayjs";
-import { calculateScoreForStats, calculateScoreForUser, updateLeaderboard, getUserScoresByWindow } from "./scoreCalculation.js";
+import { updateLeaderboard } from "./scoreCalculation.js";
 
 const parseDaysFromKey = (key) => {
   const [, rawDays] = String(key || "").split(":");
@@ -87,49 +87,13 @@ const getPaginatedLeaderboardFromMongo = async ({ page, limit, days }) => {
     return { result, hasNextPage };
   }
 
-  const end = start + limit;
-  const users = await User.find()
-    .select("username profilePicture currStreak")
-    .lean();
-
-  if (!users || users.length === 0) {
-    return { result: [], hasNextPage: false };
-  }
-
-  const userIds = users.map((u) => u._id);
-  const scoreMap = await getUserScoresByWindow({ userIds, days });
-
-  const leaderboard = users
-    .map((user) => ({
-      username: user.username,
-      profilePicture: user.profilePicture,
-      currentStreak: user.currStreak || 0,
-      points: scoreMap.get(user._id.toString()) || 0,
-    }))
-    .sort((a, b) => {
-      if (b.points !== a.points) {
-        return b.points - a.points;
-      }
-
-      if (b.currentStreak !== a.currentStreak) {
-        return b.currentStreak - a.currentStreak;
-      }
-
-      return String(a.username || "").localeCompare(String(b.username || ""));
-    });
-
-  const result = leaderboard.slice(start, end).map((player, idx) => ({
-    rank: start + idx + 1,
-    username: player.username,
-    profilePicture: player.profilePicture,
-    currentStreak: player.currentStreak,
-    points: player.points,
-  }));
-
-  return {
-    result,
-    hasNextPage: end < leaderboard.length,
-  };
+  // Redis was unavailable or returned empty — fall through to Mongo aggregation
+  // which paginates server-side via $skip/$limit (no full-table scan).
+  return await getPaginatedLeaderboardFromMongo({
+    page: sanitizedPage,
+    limit: sanitizedLimit,
+    days,
+  });
 };
 
 const formatRedisLeaderboard = async ({ raw, start, limit }) => {

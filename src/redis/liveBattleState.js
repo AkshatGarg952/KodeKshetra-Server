@@ -22,6 +22,11 @@ const releaseLock = async (redisClient, lockKey, lockToken) => {
   );
 };
 
+// Hard cap: never spin-wait more than 10 seconds regardless of TTL, to prevent
+// event loop starvation when many coroutines are waiting on locks simultaneously.
+const LOCK_SPIN_WAIT_MAX_MS = Number(process.env.REDIS_LOCK_SPIN_WAIT_MAX_MS || 10000);
+const LOCK_SPIN_WAIT_POLL_MS = 50;
+
 const withRedisLock = async (lockKey, ttlMs, worker) => {
   if (!isRedisAvailable()) {
     return null;
@@ -30,8 +35,9 @@ const withRedisLock = async (lockKey, ttlMs, worker) => {
   const redisClient = getRedisClient();
   const lockToken = uuidv4();
   const startedAt = Date.now();
+  const maxWaitMs = Math.min(ttlMs * 2, LOCK_SPIN_WAIT_MAX_MS);
 
-  while (Date.now() - startedAt < ttlMs * 2) {
+  while (Date.now() - startedAt < maxWaitMs) {
     const acquired = await redisClient.set(lockKey, lockToken, {
       NX: true,
       PX: ttlMs
@@ -49,9 +55,10 @@ const withRedisLock = async (lockKey, ttlMs, worker) => {
       }
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, LOCK_SPIN_WAIT_POLL_MS));
   }
 
+  console.warn(`[Redis] Lock ${lockKey} could not be acquired within ${maxWaitMs}ms — giving up.`);
   return null;
 };
 

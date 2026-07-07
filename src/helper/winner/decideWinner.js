@@ -1,22 +1,4 @@
-import axios from 'axios';
-import http from 'http';
-import https from 'https';
-
-const codeRunnerClient = axios.create({
-  timeout: Number(process.env.CODE_RUNNER_TIMEOUT_MS || 35000),
-  httpAgent: new http.Agent({
-    keepAlive: true,
-    maxSockets: Number(process.env.CODE_RUNNER_MAX_SOCKETS || 512)
-  }),
-  httpsAgent: new https.Agent({
-    keepAlive: true,
-    maxSockets: Number(process.env.CODE_RUNNER_MAX_SOCKETS || 512)
-  }),
-  headers: {
-    'Content-Type': 'application/json',
-    ...(process.env.INTERNAL_SERVICE_TOKEN ? { 'x-internal-token': process.env.INTERNAL_SERVICE_TOKEN } : {})
-  }
-});
+import codeRunnerClient from "../../services/codeRunnerClient.js";
 
 export async function decideWinner(code, language, problem) {
 

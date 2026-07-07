@@ -28,7 +28,7 @@ export default async function generateHiddenTests(problem, solution, platform, l
 
     const hiddenInputsResponse = await axios.post(
       `${hiddenForcesUrl}${endpoint}`,
-      { problem },
+      { problem, solution },
       {
         timeout: 300000,
         headers: process.env.INTERNAL_SERVICE_TOKEN
@@ -98,6 +98,20 @@ export default async function generateHiddenTests(problem, solution, platform, l
           problemId: problem.problemId,
           expectedOutputs: hiddenInputs.length,
           receivedOutputs: outputs.length,
+        },
+      });
+    }
+
+    const errorOutputs = outputs.filter(
+      (output) => typeof output === "string" && output.startsWith("Error:")
+    );
+    if (errorOutputs.length > 0) {
+      throw createImportError("Reference solution failed execution on generated test case(s)", {
+        statusCode: 422,
+        stage: "hidden-outputs",
+        details: {
+          problemId: problem.problemId,
+          errors: errorOutputs,
         },
       });
     }
