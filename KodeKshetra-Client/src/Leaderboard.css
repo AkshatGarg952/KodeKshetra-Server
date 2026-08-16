@@ -1,0 +1,124 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700;800&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply font-space bg-void-black text-text-primary overflow-x-hidden min-h-screen;
+}
+
+@layer utilities {
+  .gradient-text-leaderboard {
+    background: linear-gradient(135deg, #7C3AED 0%, #EC4899 50%, #06B6D4 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .gradient-text-champion {
+    background: linear-gradient(135deg, #FFD700 0%, #FFA500 50%, #FF8C00 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+}
+
+@keyframes lightning {
+  0% {
+    left: -100%;
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.8;
+  }
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.visually-hidden {
+  @apply absolute w-px h-px p-0 -m-px overflow-hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Responsive Styles */
+@media (max-width: 1200px) {
+  .leaderboard-grid {
+    @apply grid-cols-[60px_1fr_120px_120px] gap-3;
+  }
+}
+
+@media (max-width: 768px) {
+  .nav-container {
+    @apply px-4;
+  }
+  .nav-btn {
+    @apply px-4 py-2 text-sm;
+  }
+  .nav-btn span {
+    @apply hidden;
+  }
+  .page-title {
+    @apply text-4xl;
+  }
+  .page-subtitle {
+    @apply text-base;
+  }
+  .time-filters {
+    @apply flex-col max-w-xs;
+  }
+  .leaderboard-grid {
+    @apply grid-cols-[50px_1fr_100px_100px] gap-2 p-4;
+  }
+  .player-avatar {
+    @apply w-10 h-10 text-sm;
+  }
+  .player-info h3 {
+    @apply text-base;
+  }
+  .points-value,
+  .streak-value {
+    @apply text-base;
+  }
+  .pagination-container {
+    @apply flex-col gap-4 text-center;
+  }
+  .pagination-btn {
+    @apply px-6 py-3 text-sm;
+  }
+  .footer-nav {
+    @apply flex-col gap-4;
+  }
+  .social-platform-links {
+    @apply gap-4;
+  }
+  .social-platform {
+    @apply w-12 h-12 text-xl;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-title {
+    @apply text-3xl;
+  }
+  .container {
+    @apply px-4;
+  }
+  .leaderboard-grid {
+    @apply grid-cols-[40px_1fr_80px_80px] gap-2 text-sm p-2;
+  }
+  .entry-rank {
+    @apply text-base;
+  }
+  .player-avatar {
+    @apply w-9 h-9 text-xs;
+  }
+}

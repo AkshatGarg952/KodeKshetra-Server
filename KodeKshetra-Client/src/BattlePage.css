@@ -1,0 +1,26 @@
+@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-void-black text-text-primary font-inter h-screen overflow-hidden;
+  background-image: 
+    radial-gradient(circle at 20% 50%, rgba(0, 191, 255, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(57, 255, 20, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 40% 80%, rgba(255, 0, 64, 0.15) 0%, transparent 50%);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  @apply w-2;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-charcoal rounded;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply rounded bg-gradient-cyber shadow-[0_0_5px_var(--electric-blue)];
+}

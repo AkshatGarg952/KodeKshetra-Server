@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply font-space bg-void-black text-text-primary min-h-screen overflow-x-hidden leading-relaxed;
+}
+
+.badges-gallery::-webkit-scrollbar {
+  width: 6px;
+}
+
+.badges-gallery::-webkit-scrollbar-track {
+  @apply bg-slate-gray/30 rounded-sm;
+}
+
+.badges-gallery::-webkit-scrollbar-thumb {
+  @apply bg-gradient-dashboard rounded-sm;
+}
+
+.badges-gallery::-webkit-scrollbar-thumb:hover {
+  @apply bg-neon-cyan;
+}
+
+@screen lg {
+  .dashboard-grid {
+    grid-template-areas:
+      'badges stats'
+      'badges streak'
+      'badges .';
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* .visually-hidden {
+  @apply absolute w-px h-px p-0 m-[-1px] overflow-hidden clip-rect(0,0,0,0) whitespace-nowrap border-0;
+} */
+
+
+.visually-hidden {
+  @apply absolute w-px h-px p-0 m-[-1px] overflow-hidden whitespace-nowrap border-0;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%); /* modern alternative */
+}
