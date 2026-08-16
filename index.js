@@ -1,5 +1,10 @@
+// Must stay the first import: ES module imports are all evaluated before any
+// statement in this file runs, so a later dotenv.config() call would leave every
+// module that reads process.env at import time (rate limiters, Redis TTLs, XP
+// tuning) reading undefined and silently falling back to defaults.
+import "dotenv/config";
+
 import cors from "cors";
-import dotenv from "dotenv";
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
@@ -51,8 +56,6 @@ import registerMatchmakingHandlers from "./src/socket/registerMatchmakingHandler
 import registerPrivateBattleHandlers from "./src/socket/registerPrivateBattleHandlers.js";
 import { authorizeSocket } from "./src/socket/socketAuth.js";
 import { createUserEventBus } from "./src/socket/userEventBus.js";
-
-dotenv.config();
 
 // Ensure all essential environment variables are set
 const REQUIRED_ENV_VARS = ["MONGO_URI", "JWT_SECRET", "CODE_RUNNER_URL"];

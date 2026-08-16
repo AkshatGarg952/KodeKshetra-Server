@@ -31,7 +31,7 @@ KodeKshetra runs on a distributed architecture to isolate concerns:
 
 - **Runtime**: Node.js & Express.js
 - **Real-Time Layer**: Socket.io
-- **Databases**: MongoDB (Mongoose ODM) & Redis (ioredis client)
+- **Databases**: MongoDB (Mongoose ODM) & Redis (node-redis client)
 - **Security**: JWT & bcrypt password hashing
 - **File Uploads**: Multer & Cloudinary
 
@@ -42,13 +42,18 @@ KodeKshetra runs on a distributed architecture to isolate concerns:
 ```
 KodeKshetra-Server/
 ├── src/
+│   ├── config/           # CORS allow-list shared by Express and Socket.IO
 │   ├── controllers/      # Admin and user request handlers
 │   ├── database/         # MongoDB connect config
-│   ├── helper/           # XP formulas, badge checks, question loader, battle updates
-│   ├── middlewares/      # JWT auth filter, file upload limits
+│   ├── helper/           # XP formulas, badges, question loader, stats, winner
+│   ├── http/             # Leaderboard and code-execution proxy routes
+│   ├── importers/        # LeetCode/Codeforces problem import pipeline
+│   ├── middlewares/      # JWT auth filter, rate limiters, file upload limits
 │   ├── models/           # Mongoose schemas (User, Battle, CF/LC Problems)
-│   ├── redis/            # Matchmaker interval, client configuration
-│   └── routes/           # REST endpoints mapping
+│   ├── redis/            # Matchmaker, live battle state, client configuration
+│   ├── routes/           # REST endpoints mapping
+│   ├── services/         # Code-Runner HTTP client, problem cache/resolver
+│   └── socket/           # Socket.IO auth and battle event handlers
 ├── index.js              # Server entry point + Socket.io event listeners
 └── package.json
 ```
@@ -81,7 +86,10 @@ KodeKshetra-Server/
    CLOUDINARY_API_SECRET=your_cloudinary_secret
    HIDDEN_FORCES_URL=http://localhost:8000
    CODE_RUNNER_URL=http://localhost:9000
+   ADMIN_EMAIL=you@example.com
+   INTERNAL_SERVICE_TOKEN=shared_secret_for_downstream_services
    ```
+   `MONGO_URI`, `JWT_SECRET`, and `CODE_RUNNER_URL` are required — the server exits at startup if any is missing. `INTERNAL_SERVICE_TOKEN` must match the value configured on Code-Runner and HiddenForces; when blank, those services accept unauthenticated requests. See `.env.example` for the full list, including scalability tuning.
 
 3. **Start Development Server**:
    ```bash
@@ -94,9 +102,15 @@ KodeKshetra-Server/
 ## 📡 API Reference Summary
 
 ### Authentication & Users
-- `POST /api/users/register` - Create user profile
+- `POST /api/users/register` - Create user profile (multipart, optional `ProfilePicture`)
 - `POST /api/users/login` - Authenticate user & get JWT token
-- `GET /getUserDetails/:id` - Fetch user stats, streak data, heatmap, and badges
+- `GET /api/users/getUserDetails/:userId` - Fetch user stats, streak data, heatmap, and badges *(JWT)*
+- `PUT /api/users/update/:id` - Update profile details or picture *(JWT)*
+- `POST /api/users/logout` - Invalidate the current session *(JWT)*
+
+### Health
+- `GET /api/health` - Service status, uptime, and cached problem count
+- `GET /api/redis-health` - Redis connectivity status (503 when unavailable)
 
 ### Matchmaking & Execution (Proxy)
 - `POST /run` - Submit current code to Code-Runner (sample tests only)

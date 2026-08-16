@@ -30,6 +30,10 @@ export default class UserC {
     const { username, password, email, leetcodeId, codeforcesId } = req.body;
 
     try {
+      if (typeof email !== 'string' || typeof username !== 'string') {
+        return res.status(400).json({ message: "Invalid request." });
+      }
+
       if (await User.findOne({ email })) {
         return res.status(400).json({ message: "User Already exists! Try with another emailId." });
       }
@@ -57,10 +61,6 @@ export default class UserC {
       }
 
       let newUser = await User.create(newUserData);
-      if (leetcodeId) {
-        newUser.sections.dsa = true;
-        newUser.leetcodeId = leetcodeId;
-      }
       if (codeforcesId) {
         try {
           await codeforcesData(newUser._id, codeforcesId);
@@ -74,6 +74,10 @@ export default class UserC {
           await User.findByIdAndDelete(newUser._id);
           return res.status(500).json({ message: "Server error: " + err.message });
         }
+      }
+      if (leetcodeId) {
+        newUser.sections.dsa = true;
+        newUser.leetcodeId = leetcodeId;
       }
       await newUser.save();
       const createdUser = await User.findById(newUser._id);
@@ -92,6 +96,10 @@ export default class UserC {
     const { email, password } = req.body;
 
     try {
+      if (typeof email !== 'string' || typeof password !== 'string') {
+        return res.status(400).json({ message: "Please check the credentials that you have entered!" });
+      }
+
       const oldUser = await User.findOne({ email });
       if (!oldUser) {
         return res.status(400).json({ message: "No User exists with this email!" });

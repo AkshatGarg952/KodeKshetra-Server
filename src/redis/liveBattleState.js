@@ -4,7 +4,15 @@ import { getRedisClient, isRedisAvailable } from './redisClient.js';
 const PRIVATE_ROOM_TTL_SECONDS = Number(process.env.PRIVATE_ROOM_TTL_SECONDS || 7200);
 const PRIVATE_ROOM_LOCK_TTL_MS = Number(process.env.PRIVATE_ROOM_LOCK_TTL_MS || 5000);
 const BATTLE_SUBMISSION_TTL_SECONDS = Number(process.env.BATTLE_SUBMISSION_TTL_SECONDS || 7200);
-const BATTLE_PROCESSING_LOCK_TTL_MS = Number(process.env.BATTLE_PROCESSING_LOCK_TTL_MS || 120000);
+// codeRunnerClient.js retries failed requests 3 times (4 attempts total) at
+// CODE_RUNNER_TIMEOUT_MS each, and decideWinner awaits two such calls in parallel —
+// the lock must outlive that worst case or a slow runner lets a second caller
+// re-run resolution (double XP/stat increments) while the first is still in flight.
+const CODE_RUNNER_TIMEOUT_MS = Number(process.env.CODE_RUNNER_TIMEOUT_MS || 35000);
+const CODE_RUNNER_MAX_ATTEMPTS = 4;
+const BATTLE_PROCESSING_LOCK_TTL_MS = Number(
+  process.env.BATTLE_PROCESSING_LOCK_TTL_MS || (CODE_RUNNER_TIMEOUT_MS * CODE_RUNNER_MAX_ATTEMPTS + 20000)
+);
 
 const getPrivateRoomMembersKey = (roomId) => `private-room:${roomId}:members`;
 const getPrivateRoomConfigKey = (roomId) => `private-room:${roomId}:config`;

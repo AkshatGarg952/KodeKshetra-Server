@@ -1,3 +1,18 @@
+/**
+ * Returns the result the opponent earns when one player's status is already known.
+ * @param {"won"|"loss"|"draw"} status - The known player's battle status.
+ * @returns {"won"|"loss"|"draw"} The mirrored status for the other player.
+ */
+const mirrorBattleStatus = (status) => {
+  if (status === "won") {
+    return "loss";
+  }
+  if (status === "loss") {
+    return "won";
+  }
+  return "draw";
+};
+
 export default function registerPrivateBattleHandlers(socket, {
   Battle,
   BATTLE_DURATION_SECONDS,
@@ -291,58 +306,63 @@ export default function registerPrivateBattleHandlers(socket, {
       return;
     }
 
-    const user = await User.findById(authenticatedUserId).select("currWinStreak").lean();
-    if (!user) {
-      return;
-    }
-
-    const currentPlayer = {
-      id: authenticatedUserId,
-      code: code || "",
-      time: battleDetails.timeRemaining ?? 0,
-      currWinStreak: user.currWinStreak,
-      language: battleDetails.language || null,
-    };
-
-    if (lost) {
-      currentPlayer.status = "loss";
-    }
-
     let submissionMap = null;
-    if (isRedisAvailable()) {
-      const submissionCount = await recordBattleSubmission({
-        battleId: battleDetails.battleId,
-        userId: authenticatedUserId,
-        payload: currentPlayer,
-      });
-
-      if ((submissionCount || 0) < 2) {
+    try {
+      const user = await User.findById(authenticatedUserId).select("currWinStreak").lean();
+      if (!user) {
         return;
       }
 
-      const shouldProcess = await claimBattleProcessing(battleDetails.battleId);
-      if (!shouldProcess) {
-        return;
+      const currentPlayer = {
+        id: authenticatedUserId,
+        code: code || "",
+        time: battleDetails.timeRemaining ?? 0,
+        currWinStreak: user.currWinStreak,
+        language: battleDetails.language || null,
+      };
+
+      if (lost) {
+        currentPlayer.status = "loss";
       }
 
-      submissionMap = await getBattleSubmissions(battleDetails.battleId);
-      if (!submissionMap || submissionMap.size < 2) {
-        await clearBattleProcessingState(battleDetails.battleId);
-        return;
-      }
-    } else if (battleSubmissions.has(battleDetails.battleId)) {
-      if (processingBattles.has(battleDetails.battleId)) {
-        return;
-      }
+      if (isRedisAvailable()) {
+        const submissionCount = await recordBattleSubmission({
+          battleId: battleDetails.battleId,
+          userId: authenticatedUserId,
+          payload: currentPlayer,
+        });
 
-      processingBattles.add(battleDetails.battleId);
-      const firstSubmission = battleSubmissions.get(battleDetails.battleId);
-      submissionMap = new Map([
-        [firstSubmission.id, firstSubmission],
-        [authenticatedUserId, currentPlayer],
-      ]);
-    } else {
-      battleSubmissions.set(battleDetails.battleId, currentPlayer);
+        if ((submissionCount || 0) < 2) {
+          return;
+        }
+
+        const shouldProcess = await claimBattleProcessing(battleDetails.battleId);
+        if (!shouldProcess) {
+          return;
+        }
+
+        submissionMap = await getBattleSubmissions(battleDetails.battleId);
+        if (!submissionMap || submissionMap.size < 2) {
+          await clearBattleProcessingState(battleDetails.battleId);
+          return;
+        }
+      } else if (battleSubmissions.has(battleDetails.battleId)) {
+        if (processingBattles.has(battleDetails.battleId)) {
+          return;
+        }
+
+        processingBattles.add(battleDetails.battleId);
+        const firstSubmission = battleSubmissions.get(battleDetails.battleId);
+        submissionMap = new Map([
+          [firstSubmission.id, firstSubmission],
+          [authenticatedUserId, currentPlayer],
+        ]);
+      } else {
+        battleSubmissions.set(battleDetails.battleId, currentPlayer);
+        return;
+      }
+    } catch (error) {
+      console.error("Error recording battle submission:", error.message);
       return;
     }
 
@@ -390,18 +410,16 @@ export default function registerPrivateBattleHandlers(socket, {
 
       finalizedParticipantIds = [player1.id, player2.id];
 
-      const preStatus = player1.status || player2.status;
-      if (preStatus) {
-        if (preStatus === "won") {
-          player1.status = player1.status || "won";
-          player2.status = player2.status || "loss";
-        } else if (preStatus === "loss") {
-          player1.status = player1.status || "loss";
-          player2.status = player2.status || "won";
-        } else {
-          player1.status = player1.status || "draw";
-          player2.status = player2.status || "draw";
-        }
+      // A player who forfeits ("Leave Battle") submits with a pre-set status; the
+      // opponent takes the mirrored result. The status has to be mirrored from
+      // whichever side actually carries it — collapsing both into a single
+      // `player1.status || player2.status` loses track of *who* forfeited and
+      // marked both players as losers whenever player2 was the one who left.
+      // If both sides arrive with a status (double forfeit), leave them as-is.
+      if (player1.status && !player2.status) {
+        player2.status = mirrorBattleStatus(player1.status);
+      } else if (player2.status && !player1.status) {
+        player1.status = mirrorBattleStatus(player2.status);
       }
 
       if (!player1.status && !player2.status) {

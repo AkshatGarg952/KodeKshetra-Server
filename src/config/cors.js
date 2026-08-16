@@ -36,7 +36,9 @@ export function isOriginAllowed(origin) {
       return true;
     }
 
-    if (protocol === "https:" && hostname.endsWith(".vercel.app")) {
+    // Only trust this project's own Vercel preview deployments
+    // (e.g. kode-kshetra-client-git-branch-team.vercel.app), not any *.vercel.app.
+    if (protocol === "https:" && hostname.endsWith(".vercel.app") && hostname.startsWith("kode-kshetra-client")) {
       return true;
     }
   } catch {

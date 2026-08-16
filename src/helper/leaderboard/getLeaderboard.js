@@ -87,13 +87,8 @@ const getPaginatedLeaderboardFromMongo = async ({ page, limit, days }) => {
     return { result, hasNextPage };
   }
 
-  // Redis was unavailable or returned empty — fall through to Mongo aggregation
-  // which paginates server-side via $skip/$limit (no full-table scan).
-  return await getPaginatedLeaderboardFromMongo({
-    page: sanitizedPage,
-    limit: sanitizedLimit,
-    days,
-  });
+  // No rows in this time window.
+  return { result: [], hasNextPage: false };
 };
 
 const formatRedisLeaderboard = async ({ raw, start, limit }) => {
